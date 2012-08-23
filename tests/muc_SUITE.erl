@@ -30,6 +30,7 @@
 -define(NS_MUC_REQUEST, <<"http://jabber.org/protocol/muc#request">>).
 -define(NS_MUC_ROOMCONFIG, <<"http://jabber.org/protocol/muc#roomconfig">>).
 
+-record(muc_online_room, {name_host, pid, state}).
 %%--------------------------------------------------------------------
 %% Suite configuration
 %%--------------------------------------------------------------------
@@ -125,32 +126,33 @@ groups() -> [
                                      exit_room_with_status
                                     ]},
              {owner, [], [
-                                  room_creation_not_allowed,
-                                  %% fails, see testcase
-                                  cant_enter_locked_room,
-                                  create_instant_room,
-                                  destroy_locked_room,
-                                  create_reserved_room,
-                                  %% fails, see testcase
-                                  reserved_room_cancel,
-                                  reserved_room_unacceptable,
-                                  reserved_room_configuration,
-                                  owner_grant_revoke,
-                                  owner_grant_revoke_with_reason,
-                                  owner_list,
-                                  owner_unauthorized,
-                                  admin_grant_revoke,
-                                  admin_grant_revoke_with_reason,
-                                  admin_list,
-                                  admin_unauthorized,
-                                  destroy,
-                                  destroy_unauthorized,
-                                  config_denial,
-                                  config_cancel,
-                                  configure,
-                                  configure_logging,
-                                  %% fails, see testcase
-                                  configure_anonymous
+									room_creation_not_allowed,
+									%% fails, see testcase
+									cant_enter_locked_room,
+									create_instant_room,
+									destroy_locked_room,
+									destroy_normal_room,
+									create_reserved_room,
+									%% fails, see testcase
+									reserved_room_cancel,
+									reserved_room_unacceptable,
+									reserved_room_configuration,
+									owner_grant_revoke,
+									owner_grant_revoke_with_reason,
+									owner_list,
+									owner_unauthorized,
+									admin_grant_revoke,
+									admin_grant_revoke_with_reason,
+									admin_list,
+									admin_unauthorized,
+									destroy,
+ 									destroy_unauthorized,
+ 									config_denial,
+									config_cancel,
+									configure,
+									configure_logging,
+									%% fails, see testcase
+									configure_anonymous
                                  ]},
              {room_management, [], [
                                             create_and_destroy_room
@@ -487,6 +489,7 @@ end_per_testcase(CaseName = config_denial, Config) ->
     timer:sleep(3000);
 
 end_per_testcase(CaseName = destroy_unauthorized, Config) ->
+	destroy_room(Config),
     escalus:end_per_testcase(CaseName, Config),
     timer:sleep(3000);
 
@@ -2591,6 +2594,42 @@ create_instant_room(Config) ->
         escalus_assert:has_no_stanzas(Alice)
     end).
 
+destroy_normal_room(Config) ->
+    escalus:story(Config, [1, 1], fun(Alice, Bob) ->
+        Room1 = stanza_muc_enter_room(<<"room1">>, <<"nick1">>),
+        escalus:send(Alice, Room1),
+
+
+        was_room_created(escalus:wait_for_stanza(Alice)),
+        escalus:wait_for_stanza(Alice),
+
+        R = escalus_stanza:setattr(stanza_instant_room(<<"room1@muc.localhost">>),
+                                   <<"from">>, escalus_utils:get_jid(Alice)),
+        print(R),
+        escalus:send(Alice, R),
+        IQ = escalus:wait_for_stanza(Alice),
+        print(IQ),
+        escalus:assert(is_iq_result, IQ),
+
+        Room2 = stanza_muc_enter_room(<<"room1">>, <<"nick2">>),
+        escalus:send(Bob, Room2),
+print_next_message(Alice),
+print_next_message(Bob),
+print_next_message(Bob),
+print_next_message(Bob),
+        DestroyRoom1 = stanza_destroy_room(<<"room1">>),
+        	print(DestroyRoom1),
+        escalus:send(Alice, DestroyRoom1),
+        [Presence, Iq] = escalus:wait_for_stanzas(Alice, 2),
+                print("==============================="),
+                print(Iq),
+                print(Presence),
+        was_room_destroyed(Iq),
+        was_destroy_presented(Presence),
+print_next_message(Bob),
+		escalus_assert:has_no_stanzas(Alice)
+    end).
+
 destroy_locked_room(Config) ->
     escalus:story(Config, [1], fun(Alice) ->
         Room1 = stanza_muc_enter_room(<<"room1">>, <<"nick1">>),
@@ -3507,11 +3546,12 @@ start_room(Config, User, Room, Nick, Opts) ->
     [{nick, Nick}, {room, Room} | Config].
 
 destroy_room(Config) ->
-    case escalus_ejabberd:rpc(ets, lookup, [muc_online_room,
-        {?config(room, Config), <<"muc.localhost">>}]) of
-        [{_,_,Pid}|_] -> gen_fsm:send_all_state_event(Pid, destroy);
-        _ -> ok
-    end.
+    [
+		gen_fsm:send_all_state_event(Pid, destroy) ||
+		#muc_online_room{pid = Pid} <- 
+		escalus_ejabberd:rpc(ets, lookup, [muc_online_room,
+        {?config(room, Config), <<"muc.localhost">>}])
+	].
 
 room_address(Room) ->
     <<Room/binary, "@", ?MUC_HOST/binary>>.
