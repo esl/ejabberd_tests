@@ -31,15 +31,19 @@
 all() ->
     [{group, roster},
      {group, roster_odbc},
+     {group, roster_bank},
      {group, subscriptions},
-     {group, subscriptions_odbc}
+     {group, subscriptions_odbc},
+     {group, subscriptions_bank}
     ].
 
 groups() ->
     [{roster, [sequence], roster_tests()},
      {roster_odbc, [sequence], roster_tests()},
+     {roster_bank, [sequence], roster_tests()},
      {subscriptions, [sequence], subscription_tests()},
-     {subscriptions_odbc, [sequence], subscription_tests()}
+     {subscriptions_odbc, [sequence], subscription_tests()},
+     {subscriptions_bank, [sequence], subscription_tests()}
     ].
 
 suite() ->
@@ -72,12 +76,20 @@ init_per_group(roster_odbc, Config) ->
     restart_mod_roster("_odbc"),
     escalus:create_users(Config);
 
+init_per_group(roster_bank, Config) ->
+    restart_mod_roster("_bank"),
+    escalus:create_users(Config);
+
 init_per_group(subscriptions, Config) ->
     restart_mod_roster(""),
     escalus:create_users(Config);
 
 init_per_group(subscriptions_odbc, Config) ->
     restart_mod_roster("_odbc"),
+    escalus:create_users(Config);
+
+init_per_group(subscriptions_bank, Config) ->
+    restart_mod_roster("_bank"),
     escalus:create_users(Config);
 
 init_per_group(_GroupName, Config) ->
@@ -355,6 +367,7 @@ add_sample_contact(Alice, Bob, Groups, Name) ->
 
 remove_roster(Config, UserSpec) ->
     [Username, Server, _Pass] = escalus_users:get_usp(Config, UserSpec),
+    rpc:call(ejabberd@localhost, mod_roster_bank, remove_user, [Username, Server]),
     rpc:call(ejabberd@localhost, mod_roster_odbc, remove_user, [Username, Server]),
     rpc:call(ejabberd@localhost, mod_roster, remove_user, [Username, Server]).
 

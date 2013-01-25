@@ -25,12 +25,14 @@
 
 all() ->
     [{group, last},
-     {group, last_odbc}
+     {group, last_odbc},
+     {group, last_bank}
     ].
 
 groups() ->
      [{last, [sequence], test_cases()},
-      {last_odbc, [sequence], test_cases()}
+      {last_odbc, [sequence], test_cases()},
+      {last_bank, [sequence], test_cases()}
      ].
 test_cases() -> [last_online_user,
                  last_offline_user,
@@ -124,8 +126,8 @@ start_mod_last(last) ->
     start_mod_last(mod_last);
 start_mod_last(last_odbc) ->
     start_mod_last(mod_last_odbc);
+start_mod_last(last_bank) ->
+    start_mod_last(mod_last_bank);
 start_mod_last(Module) ->
     Domain = ct:get_config(ejabberd_domain),
     ok = dynamic_modules:restart(Domain, Module, []).
-
-

@@ -33,7 +33,9 @@ groups() ->
     [{private_positive, [sequence], positive_test_cases()},
       {private_negative, [sequence], negative_test_cases()},
       {private_positive_odbc, [sequence], positive_test_cases()},
-      {private_negative_odbc, [sequence], negative_test_cases()}].
+      {private_negative_odbc, [sequence], negative_test_cases()},
+      {private_positive_bank, [sequence], positive_test_cases()},
+      {private_negative_bank, [sequence], negative_test_cases()}].
                                       %% FIXME: broken exmpp prevents us from sending
                                       %% out elements without NS set
                                       %% missing_ns]}].
@@ -168,8 +170,12 @@ restart_module_from_group(private_positive) ->
     restart_module(mod_private);
 restart_module_from_group(private_negative) ->
     restart_module(mod_private);
+restart_module_from_group(private_positive_odbc) ->
+    restart_module(mod_private_odbc);
+restart_module_from_group(private_negative_odbc) ->
+    restart_module(mod_private_odbc);
 restart_module_from_group(_) ->
-    restart_module(mod_private_odbc).
+    restart_module(mod_private_bank).
 restart_module(Mod) ->
     Domain = ct:get_config(ejabberd_domain),
     dynamic_modules:restart(Domain, Mod, []).

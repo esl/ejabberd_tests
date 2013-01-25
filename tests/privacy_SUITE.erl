@@ -31,14 +31,18 @@ all() ->
     [{group, management},
      {group, blocking},
      {group, management_odbc},
-     {group, blocking_odbc}
+     {group, blocking_odbc},
+     {group, management_bank},
+     {group, blocking_bank}
     ].
 
 groups() ->
     [{management, [sequence], management_test_cases()},
      {management_odbc, [sequence], management_test_cases()},
+     {management_bank, [sequence], management_test_cases()},
      {blocking, [sequence], blocking_test_cases()},
-     {blocking_odbc, [sequence], blocking_test_cases()}
+     {blocking_odbc, [sequence], blocking_test_cases()},
+     {blocking_bank, [sequence], blocking_test_cases()}
     ].
 management_test_cases() -> 
     [get_all_lists,
@@ -90,6 +94,12 @@ init_per_group(management_odbc, Config) ->
     common_for_groups(Config);
 init_per_group(blocking_odbc, Config) ->
     privacy_helper:restart_mod_privacy("_odbc"),
+    common_for_groups(Config);
+init_per_group(management_bank, Config) ->
+    privacy_helper:restart_mod_privacy("_bank"),
+    common_for_groups(Config);
+init_per_group(blocking_bank, Config) ->
+    privacy_helper:restart_mod_privacy("_bank"),
     common_for_groups(Config);
 init_per_group(_GroupName, Config) ->
     privacy_helper:restart_mod_privacy(""),

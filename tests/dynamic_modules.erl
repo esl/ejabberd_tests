@@ -22,13 +22,14 @@ start(Domain, Mod, Args) ->
     end.
 
 restart(Domain, Mod, Args) ->
-    stop(Domain, Mod),
-    ModStr = atom_to_list(Mod),
-    case lists:reverse(ModStr) of
-        "cbdo_" ++ Str -> %%check if we need to start odbc module or regular
-            stop(Domain, list_to_atom(lists:reverse(Str)));
-        Str ->
-            stop(Domain, list_to_atom(lists:reverse(Str)++"_odbc"))
+    ModStr = case lists:reverse(atom_to_list(Mod)) of
+        "cbdo_" ++ Rest ->
+            lists:reverse(Rest);
+        "knab_" ++ Rest ->
+            lists:reverse(Rest);
+        Other ->
+            lists:reverse(Other)
     end,
+    _ = [stop(Domain, list_to_atom(M)) ||
+         M <- [ModStr, ModStr ++ "_odbc", ModStr ++ "_bank"]],
     start(Domain, Mod, Args).
-
