@@ -388,6 +388,11 @@ remove_roster(Config, UserSpec) ->
                 true ->
                     ok = escalus_ejabberd:rpc(mod_roster_odbc, remove_user, [Username, Server]);
                 false ->
-                    throw(roster_not_loaded)
+                    case lists:member(mod_roster_bank, Mods) of
+                        true ->
+                            ok = escalus_ejabberd:rpc(mod_roster_bank, remove_user, [Username, Server]);
+                        false ->
+                            throw(roster_not_loaded)
+                    end
             end
     end.
