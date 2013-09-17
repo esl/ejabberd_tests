@@ -2,6 +2,7 @@
 -compile(export_all).
 
 -include_lib("escalus/include/escalus.hrl").
+-include_lib("escalus/include/escalus_xmlns.hrl").
 -include_lib("common_test/include/ct.hrl").
 
 %%--------------------------------------------------------------------
@@ -12,11 +13,13 @@
 -define(PUBSUB_JID, <<"pubsub.localhost">>).
 
 all() ->
-    [{group, disco}].
+    [{group, disco},
+     {group, pep}].
 
 groups() ->
     [{disco, [], [pubsub_feature,
-                  has_node]}].
+                  has_node]},
+     {pep, [], [publish_test]}].
 
 suite() ->
     escalus:suite().
@@ -65,7 +68,21 @@ has_node(Config) ->
         escalus:assert(has_item, [?PUBSUB_JID, <<"/home">>], Stanza)
     end).
 
+%% Node should be auto-created when the user tries to publish an event.
+publish_test(Config) ->
+    escalus:story(Config, [1, 1], fun(Alice, Bob) ->
+        Publish = publish_reach(Alice, [<<"tel:+1-303-555-1212">>,
+                                        <<"sip:alice@wonderland.lit">>]),
+        escalus:send(Alice, Publish),
+        ExpectedNotification = escalus:wait_for_stanza(Bob),
+        error_logger:info_msg("notification: ~p~n", ExpectedNotification)
+    end).
+
 %%--------------------------------------------------------------------
 %% Helpers
 %%--------------------------------------------------------------------
 
+publish_reach(From, Addrs) ->
+    Reach = escalus_stanza:reach(Addrs),
+    Items = escalus_stanza:pubsub_items([Reach]),
+    escalus_stanza:publish_iq(From, ?NS_REACH, Items).
