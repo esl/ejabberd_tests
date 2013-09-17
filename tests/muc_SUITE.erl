@@ -2503,7 +2503,7 @@ disco_service(Config) ->
 
 disco_features(Config) ->
     escalus:story(Config, [1], fun(Alice) ->
-        escalus:send(Alice, stanza_get_features()),
+        escalus:send(Alice, escalus_stanza:disco_info(?MUC_HOST),
         Stanza = escalus:wait_for_stanza(Alice),
         has_features(Stanza),
         escalus:assert(is_stanza_from, [?MUC_HOST], Stanza)
@@ -2521,7 +2521,7 @@ disco_rooms(Config) ->
 
 disco_info(Config) ->
     escalus:story(Config, [1], fun(Alice) ->
-        escalus:send(Alice, stanza_to_room(escalus_stanza:iq_get(?NS_DISCO_INFO,[]), <<"alicesroom">>)),
+        escalus:send(Alice, escalus_stanza:disco_info(room_address(<<"alicesroom">>))),
         Stanza = escalus:wait_for_stanza(Alice),
         escalus:assert(is_iq_result, Stanza),
         escalus:assert(has_feature, [<<"muc_persistent">>], Stanza)
@@ -2532,7 +2532,7 @@ disco_items(Config) ->
         escalus:send(Alice, stanza_join_room(<<"alicesroom">>, <<"nicenick">>)),
         _Stanza = escalus:wait_for_stanza(Alice),
 
-        escalus:send(Bob, stanza_to_room(escalus_stanza:iq_get(?NS_DISCO_ITEMS,[]), <<"alicesroom">>)),
+        escalus:send(Bob, escalus_stanza:disco_info(room_address(<<"alicesroom">>))),
         Stanza2 = escalus:wait_for_stanza(Bob),
         escalus:assert(is_iq_result, Stanza2)
     end).
@@ -2738,7 +2738,7 @@ reserved_room_configuration(Config) ->
         escalus:assert(is_stanza_from, [<<"roomfive@muc.localhost">>], Result),
 
         %% Check if it worked
-        escalus:send(Alice, stanza_to_room(escalus_stanza:iq_get(?NS_DISCO_INFO,[]), <<"roomfive">>)),
+        escalus:send(Alice, escalus_stanza:disco_info(room_address(<<"roomfive">>))),
         Stanza = escalus:wait_for_stanza(Alice),
         escalus:assert(is_iq_result, Stanza),
         escalus:assert(has_feature, [<<"muc_persistent">>], Stanza),
@@ -2809,8 +2809,7 @@ configure(Config) ->
             [room_address(?config(room, Config))], Result),
 
         %% Check if it worked
-        escalus:send(Alice, stanza_to_room(escalus_stanza:iq_get(
-            ?NS_DISCO_INFO,[]), ?config(room, Config))),
+        escalus:send(Alice, escalus_stanza:disco_info(room_address(?config(room, Config)))),
         Stanza = escalus:wait_for_stanza(Alice),
         escalus:assert(is_iq_result, Stanza),
         escalus:assert(has_feature, [<<"muc_persistent">>], Stanza),
@@ -3925,16 +3924,6 @@ stanza_get_rooms() ->
     %% <query xmlns='http://jabber.org/protocol/disco#items'/>
     %% </iq>
     escalus_stanza:setattr(escalus_stanza:iq_get(?NS_DISCO_ITEMS, []), <<"to">>,
-        ?MUC_HOST).
-
-stanza_get_features() ->
-    %% <iq from='hag66@shakespeare.lit/pda'
-    %%     id='lx09df27'
-    %%     to='chat.shakespeare.lit'
-    %%     type='get'>
-    %%  <query xmlns='http://jabber.org/protocol/disco#info'/>
-    %% </iq>
-    escalus_stanza:setattr(escalus_stanza:iq_get(?NS_DISCO_INFO, []), <<"to">>,
         ?MUC_HOST).
 
 stanza_get_services(Config) ->
