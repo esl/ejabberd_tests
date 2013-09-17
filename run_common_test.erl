@@ -16,37 +16,7 @@ tests_to_run() ->
     [{config, [ct_config_file(), ct_vcard_config_file()]},
      {dir, ?CT_DIR},
      {logdir, ?CT_REPORT},
-     {suite, [
-            adhoc_SUITE,
-            anonymous_SUITE,
-            last_SUITE,
-            login_SUITE,
-            muc_SUITE,
-            offline_SUITE,
-            presence_SUITE,
-            privacy_SUITE,
-            private_SUITE,
-            s2s_SUITE,
-            sic_SUITE,
-            %snmp_SUITE,
-            %snmp_c2s_SUITE,
-            %snmp_register_SUITE,
-            %snmp_roster_SUITE,
-            %snmp_session_SUITE,
-            %snmp_table_SUITE,
-            vcard_SUITE,
-            websockets_SUITE,
-            metrics_c2s_SUITE,
-            metrics_roster_SUITE,
-            metrics_register_SUITE,
-            metrics_session_SUITE,
-            system_monitor_SUITE
-            ]}].
-
-    %{suite, muc_SUITE},
-     %{group, admin},
-     %{testcase, admin_moderator},
-     %{repeat, 4}].
+     {suite, [pubsub_SUITE]}].
 
 ct() ->
     run_test(tests_to_run()),
