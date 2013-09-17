@@ -2524,7 +2524,7 @@ disco_info(Config) ->
         escalus:send(Alice, stanza_to_room(escalus_stanza:iq_get(?NS_DISCO_INFO,[]), <<"alicesroom">>)),
         Stanza = escalus:wait_for_stanza(Alice),
         escalus:assert(is_iq_result, Stanza),
-        has_feature(Stanza, <<"muc_persistent">>)
+        escalus:assert(has_feature, [<<"muc_persistent">>], Stanza)
     end).
 
 disco_items(Config) ->
@@ -2741,9 +2741,9 @@ reserved_room_configuration(Config) ->
         escalus:send(Alice, stanza_to_room(escalus_stanza:iq_get(?NS_DISCO_INFO,[]), <<"roomfive">>)),
         Stanza = escalus:wait_for_stanza(Alice),
         escalus:assert(is_iq_result, Stanza),
-        has_feature(Stanza, <<"muc_persistent">>),
-        has_feature(Stanza, <<"muc_moderated">>),
-        has_feature(Stanza, <<"muc_public">>),
+        escalus:assert(has_feature, [<<"muc_persistent">>], Stanza),
+        escalus:assert(has_feature, [<<"muc_moderated">>], Stanza),
+        escalus:assert(has_feature, [<<"muc_public">>], Stanza),
 
         %% Destroy the room to clean up
         escalus:send(Alice, stanza_destroy_room(<<"roomfive">>)),
@@ -2813,9 +2813,9 @@ configure(Config) ->
             ?NS_DISCO_INFO,[]), ?config(room, Config))),
         Stanza = escalus:wait_for_stanza(Alice),
         escalus:assert(is_iq_result, Stanza),
-        has_feature(Stanza, <<"muc_persistent">>),
-        has_feature(Stanza, <<"muc_moderated">>),
-        has_feature(Stanza, <<"muc_public">>)
+        escalus:assert(has_feature, [<<"muc_persistent">>], Stanza),
+        escalus:assert(has_feature, [<<"muc_moderated">>], Stanza),
+        escalus:assert(has_feature, [<<"muc_public">>], Stanza)
     end).
 
 %%  Example 171
@@ -4071,15 +4071,6 @@ has_status_codes(Stanza, CodeList) ->
     true = lists:all(fun (Code) ->
                         lists:member(Code, StanzaCodes)
             end, CodeList).
-
-
-has_feature(Stanza, Feature) ->
-    Features = exml_query:paths(Stanza, [{element, <<"query">>},
-                                         {element, <<"feature">>}]),
-    true = lists:any(fun(Item) ->
-                        exml_query:attr(Item, <<"var">>) == Feature
-                     end,
-                     Features).
 
 was_destroy_presented(#xmlel{children = [Items]} = Presence) ->
     #xmlel{} = exml_query:subelement(Items, <<"destroy">>),
