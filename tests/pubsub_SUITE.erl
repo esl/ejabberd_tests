@@ -15,7 +15,8 @@ all() ->
     [{group, disco}].
 
 groups() ->
-    [{disco, [], [pubsub_feature]}].
+    [{disco, [], [pubsub_feature,
+                  has_node]}].
 
 suite() ->
     escalus:suite().
@@ -52,6 +53,16 @@ pubsub_feature(Config) ->
         Stanza = escalus:wait_for_stanza(Alice),
         escalus:assert(is_iq_result, Stanza),
         escalus:assert(has_feature, [?PUBSUB], Stanza)
+    end).
+
+%% I don't know yet why this node exists, but just want to have
+%% some rough but automatic verification that mod_pubsub works.
+has_node(Config) ->
+    escalus:story(Config, [1], fun(Alice) ->
+        escalus:send(Alice, escalus_stanza:disco_items(?PUBSUB_JID)),
+        Stanza = escalus:wait_for_stanza(Alice),
+        escalus:assert(is_iq_result, Stanza),
+        escalus:assert(has_item, [?PUBSUB_JID, <<"/home">>], Stanza)
     end).
 
 %%--------------------------------------------------------------------
