@@ -8,11 +8,14 @@
 %% Suite configuration
 %%--------------------------------------------------------------------
 
+-define(PUBSUB, <<"http://jabber.org/protocol/pubsub">>).
+-define(PUBSUB_JID, <<"pubsub.localhost">>).
+
 all() ->
-    [{group, pubsub}].
+    [{group, disco}].
 
 groups() ->
-    [{pubsub, [], [disco]}].
+    [{disco, [], [pubsub_feature]}].
 
 suite() ->
     escalus:suite().
@@ -43,8 +46,13 @@ end_per_testcase(CaseName, Config) ->
 %% Message tests
 %%--------------------------------------------------------------------
 
-disco(_Config) ->
-    ct:fail(not_implemented).
+pubsub_feature(Config) ->
+    escalus:story(Config, [1], fun(Alice) ->
+        escalus:send(Alice, escalus_stanza:disco_info(?PUBSUB_JID)),
+        Stanza = escalus:wait_for_stanza(Alice),
+        escalus:assert(is_iq_result, Stanza),
+        escalus:assert(has_feature, [?PUBSUB], Stanza)
+    end).
 
 %%--------------------------------------------------------------------
 %% Helpers
