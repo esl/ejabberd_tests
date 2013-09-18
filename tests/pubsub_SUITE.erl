@@ -3,6 +3,7 @@
 
 -include_lib("escalus/include/escalus.hrl").
 -include_lib("escalus/include/escalus_xmlns.hrl").
+-include_lib("exml/include/exml.hrl").
 -include_lib("common_test/include/ct.hrl").
 
 %%--------------------------------------------------------------------
@@ -20,7 +21,8 @@ groups() ->
     [{disco, [], [pubsub_feature,
                   has_node]},
      {node_lifecycle, [sequence], [create_test,
-                                   subscribe_test]}].
+                                   subscribe_test,
+                                   publish_test]}].
 
 suite() ->
     escalus:suite().
@@ -88,6 +90,28 @@ subscribe_test(Config) ->
                        escalus:wait_for_stanza(Alice))
     end).
 
+publish_test(Config) ->
+    escalus:story(Config, [1, 1], fun(Alice, Bob) ->
+        Publish = escalus_stanza:publish(<<"wonderland">>,
+                                         wonderful_items()),
+        escalus:send(Alice, Publish),
+        escalus:assert(is_pubsub_event, escalus:wait_for_stanza(Bob)),
+        escalus:assert(is_publish_result, [<<"wonderland">>],
+                       escalus:wait_for_stanza(Alice))
+    end).
+
 %%--------------------------------------------------------------------
 %% Helpers
 %%--------------------------------------------------------------------
+
+wonderful_items() ->
+    [#xmlel{name = <<"item">>,
+            children = [entry()]}].
+
+entry() ->
+    C = <<"Beware the Jabberwock, my son,\n"
+          "the jaws that bite and claws that scratch\n"
+          "Beware the jubjub bird\n"
+          "and shun the frumious bandersnatch.\n">>,
+    #xmlel{name = <<"entry">>,
+           children = [#xmlcdata{content = C}]}.
