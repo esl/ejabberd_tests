@@ -91,8 +91,3 @@ subscribe_test(Config) ->
 %%--------------------------------------------------------------------
 %% Helpers
 %%--------------------------------------------------------------------
-
-publish_reach(From, Addrs) ->
-    Reach = escalus_stanza:reach(Addrs),
-    Items = escalus_stanza:pubsub_items([Reach]),
-    escalus_stanza:publish_iq(From, ?NS_REACH, Items).
