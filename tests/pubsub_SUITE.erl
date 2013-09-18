@@ -13,11 +13,13 @@
 -define(PUBSUB_JID, <<"pubsub.localhost">>).
 
 all() ->
-    [{group, disco}].
+    [{group, disco},
+     {group, node_lifecycle}].
 
 groups() ->
     [{disco, [], [pubsub_feature,
-                  has_node]}].
+                  has_node]},
+     {node_lifecycle, [sequence], [create_test]}].
 
 suite() ->
     escalus:suite().
@@ -64,6 +66,14 @@ has_node(Config) ->
         Stanza = escalus:wait_for_stanza(Alice),
         escalus:assert(is_iq_result, Stanza),
         escalus:assert(has_item, [?PUBSUB_JID, <<"/home">>], Stanza)
+    end).
+
+create_test(Config) ->
+    escalus:story(Config, [1], fun(Alice) ->
+        Create = escalus_stanza:create_node(?PUBSUB_JID, <<"wonderland">>),
+        escalus:send(Alice, Create),
+        escalus:assert(is_node_created, [<<"wonderland">>],
+                       escalus:wait_for_stanza(Alice))
     end).
 
 %%--------------------------------------------------------------------
