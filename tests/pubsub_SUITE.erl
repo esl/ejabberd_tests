@@ -13,13 +13,11 @@
 -define(PUBSUB_JID, <<"pubsub.localhost">>).
 
 all() ->
-    [{group, disco},
-     {group, pep}].
+    [{group, disco}].
 
 groups() ->
     [{disco, [], [pubsub_feature,
-                  has_node]},
-     {pep, [], [publish_test]}].
+                  has_node]}].
 
 suite() ->
     escalus:suite().
@@ -66,16 +64,6 @@ has_node(Config) ->
         Stanza = escalus:wait_for_stanza(Alice),
         escalus:assert(is_iq_result, Stanza),
         escalus:assert(has_item, [?PUBSUB_JID, <<"/home">>], Stanza)
-    end).
-
-%% Node should be auto-created when the user tries to publish an event.
-publish_test(Config) ->
-    escalus:story(Config, [1, 1], fun(Alice, Bob) ->
-        Publish = publish_reach(Alice, [<<"tel:+1-303-555-1212">>,
-                                        <<"sip:alice@wonderland.lit">>]),
-        escalus:send(Alice, Publish),
-        ExpectedNotification = escalus:wait_for_stanza(Bob),
-        error_logger:info_msg("notification: ~p~n", ExpectedNotification)
     end).
 
 %%--------------------------------------------------------------------
