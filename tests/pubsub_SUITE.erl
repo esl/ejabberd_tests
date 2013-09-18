@@ -19,7 +19,8 @@ all() ->
 groups() ->
     [{disco, [], [pubsub_feature,
                   has_node]},
-     {node_lifecycle, [sequence], [create_test]}].
+     {node_lifecycle, [sequence], [create_test,
+                                   subscribe_test]}].
 
 suite() ->
     escalus:suite().
@@ -73,6 +74,17 @@ create_test(Config) ->
         Create = escalus_stanza:create_node(?PUBSUB_JID, <<"wonderland">>),
         escalus:send(Alice, Create),
         escalus:assert(is_node_created, [<<"wonderland">>],
+                       escalus:wait_for_stanza(Alice))
+    end).
+
+subscribe_test(Config) ->
+    escalus:story(Config, [1], fun(Alice) ->
+        BareAlice = escalus_utils:get_short_jid(Alice),
+        Subscribe = escalus_stanza:subscribe(?PUBSUB_JID, <<"wonderland">>,
+                                             BareAlice),
+        escalus:send(Alice, Subscribe),
+        escalus:assert(is_pubsub_event, escalus:wait_for_stanza(Alice)),
+        escalus:assert(is_subscription, [<<"wonderland">>, BareAlice],
                        escalus:wait_for_stanza(Alice))
     end).
 
