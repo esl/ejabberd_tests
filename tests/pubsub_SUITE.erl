@@ -95,9 +95,9 @@ publish_test(Config) ->
         Publish = escalus_stanza:publish(<<"wonderland">>,
                                          wonderful_items()),
         escalus:send(Alice, Publish),
-        escalus:assert(is_pubsub_event, escalus:wait_for_stanza(Bob)),
         escalus:assert(is_publish_result, [<<"wonderland">>],
-                       escalus:wait_for_stanza(Alice))
+                       escalus:wait_for_stanza(Alice)),
+        escalus:assert(is_pubsub_event, escalus:wait_for_stanza(Bob))
     end).
 
 %%--------------------------------------------------------------------
