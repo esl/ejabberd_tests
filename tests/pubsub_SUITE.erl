@@ -80,14 +80,14 @@ create_test(Config) ->
     end).
 
 subscribe_test(Config) ->
-    escalus:story(Config, [1], fun(Alice) ->
-        BareAlice = escalus_utils:get_short_jid(Alice),
+    escalus:story(Config, [{bob,1}], fun(Bob) ->
+        BareBob = escalus_utils:get_short_jid(Bob),
         Subscribe = escalus_stanza:subscribe(?PUBSUB_JID, <<"wonderland">>,
-                                             BareAlice),
-        escalus:send(Alice, Subscribe),
-        escalus:assert(is_pubsub_event, escalus:wait_for_stanza(Alice)),
-        escalus:assert(is_subscription, [<<"wonderland">>, BareAlice],
-                       escalus:wait_for_stanza(Alice))
+                                             BareBob),
+        escalus:send(Bob, Subscribe),
+        escalus:assert(is_pubsub_event, escalus:wait_for_stanza(Bob)),
+        escalus:assert(is_subscription, [<<"wonderland">>, BareBob],
+                       escalus:wait_for_stanza(Bob))
     end).
 
 publish_test(Config) ->
