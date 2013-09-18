@@ -20,6 +20,11 @@ all() ->
 groups() ->
     [{disco, [], [pubsub_feature,
                   has_node]},
+     %% These are run in sequence for a reason.
+     %% Each one sets up the env in a particular state expected by the next.
+     %% On deregistering the node owner all his nodes are deleted,
+     %% so don't expect to find any changes in `pubsub_node' ets
+     %% after the group has finished.
      {node_lifecycle, [sequence], [create_test,
                                    subscribe_test,
                                    publish_test]}].
