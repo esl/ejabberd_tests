@@ -15,7 +15,8 @@
 
 all() ->
     [{group, disco},
-     {group, node_lifecycle}].
+     {group, node_lifecycle},
+     {group, pep}].
 
 groups() ->
     [{disco, [], [pubsub_feature,
@@ -27,7 +28,8 @@ groups() ->
      %% after the group has finished.
      {node_lifecycle, [sequence], [create_test,
                                    subscribe_test,
-                                   publish_test]}].
+                                   publish_test]},
+     {pep, [], [pep_publish]}].
 
 suite() ->
     escalus:suite().
@@ -105,6 +107,14 @@ publish_test(Config) ->
         escalus:assert(is_pubsub_event, escalus:wait_for_stanza(Bob))
     end).
 
+%% `pep_publish/1' relies on PubSub PEP profile auto-create,
+%% auto-subscribe and filtered-notifications features.
+pep_publish(Config) ->
+    escalus:story(Config, [1, 1], fun(Alice, Bob) ->
+        escalus:send(Bob, fake_caps_presence(<<"wonderland">>)),
+        ct:fail(unfinished)
+    end).
+
 %%--------------------------------------------------------------------
 %% Helpers
 %%--------------------------------------------------------------------
@@ -120,3 +130,19 @@ entry() ->
           "and shun the frumious bandersnatch.\n">>,
     #xmlel{name = <<"entry">>,
            children = [#xmlcdata{content = C}]}.
+
+fake_caps_presence(Node) ->
+    escalus_stanza:presence(<<"available">>, [fake_caps(Node)]).
+
+fake_caps(Node) ->
+    #xmlel{name = <<"c">>,
+           attrs = [{<<"xmlns">>, ?NS_CAPS},
+                    {<<"node">>, Node},
+                    %% XXX This is the lame fake part.
+                    %%     The value should be computed based on the entity
+                    %%     capabilities but that's a really involved process.
+                    {<<"ver">>, id()}]}.
+
+-spec id() -> binary().
+id() ->
+    base16:encode(crypto:rand_bytes(16)).
