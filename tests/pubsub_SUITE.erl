@@ -111,7 +111,16 @@ publish_test(Config) ->
 %% auto-subscribe and filtered-notifications features.
 pep_publish(Config) ->
     escalus:story(Config, [1, 1], fun(Alice, Bob) ->
+        %% Send a fake caps presence to make the server ask about
+        %% Bob's identity+features.
         escalus:send(Bob, fake_caps_presence(<<"wonderland">>)),
+        %% Ensure the server sends expected disco#info.
+        DiscoInfo = escalus:wait_for_stanza(Bob),
+        escalus:assert(is_disco_info, DiscoInfo),
+        %% Send the identity+features.
+        escalus:send(Bob, pc_client_info(DiscoInfo,
+                                         [<<"wonderland">>,
+                                          <<"wonderland+notify">>])),
         ct:fail(unfinished)
     end).
 
@@ -142,6 +151,22 @@ fake_caps(Node) ->
                     %%     The value should be computed based on the entity
                     %%     capabilities but that's a really involved process.
                     {<<"ver">>, id()}]}.
+
+pc_client_info(DiscoInfo, Features) ->
+    Q = #xmlel{name = <<"query">>,
+               attrs = [{<<"xmlns">>, ?NS_DISCO_INFO}],
+               children = [pc_client_identity()] ++ [feature(F)
+                                                     || F <- Features]},
+    (escalus_stanza:iq_result(DiscoInfo))#xmlel{children = [Q]}.
+
+pc_client_identity() ->
+    #xmlel{name = <<"identity">>,
+           attrs = [{<<"category">>, <<"client">>},
+                    {<<"type">>, <<"pc">>}]}.
+
+feature(F) ->
+    #xmlel{name = <<"feature">>,
+           attrs = [{<<"var">>, F}]}.
 
 -spec id() -> binary().
 id() ->
