@@ -121,6 +121,16 @@ pep_publish(Config) ->
         escalus:send(Bob, pc_client_info(DiscoInfo,
                                          [<<"wonderland">>,
                                           <<"wonderland+notify">>])),
+        %% Discard Bob's broadcasted presence.
+        escalus:assert(is_presence_with_type, [<<"available">>],
+                      escalus:wait_for_stanza(Bob)),
+        %% Publish an event.
+        Publish = escalus_stanza:publish(<<"wonderland">>,
+                                         wonderful_items()),
+        escalus:send(Alice, Publish),
+        escalus:assert(is_publish_result, [<<"wonderland">>],
+                       escalus:wait_for_stanza(Alice)),
+        escalus:wait_for_stanzas(Bob, 10),
         ct:fail(unfinished)
     end).
 
