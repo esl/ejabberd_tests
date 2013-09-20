@@ -180,4 +180,10 @@ feature(F) ->
 
 -spec id() -> binary().
 id() ->
-    base16:encode(crypto:rand_bytes(16)).
+    %% A static ID here makes the server recognize this set of capabilities.
+    %% In other words, it triggers mod_pubsub:caps_update with a sensible
+    %% set of advertised features.
+    %% Why doesn't a disco#info reply trigger that call?
+    %% Maybe the node value of "wonderland#123456" (where 123456 is the id
+    %% sent to the server) must be copied inside the disco#info reply?
+    <<"11111">>.
