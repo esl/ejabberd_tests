@@ -111,6 +111,8 @@ publish_test(Config) ->
 %% auto-subscribe and filtered-notifications features.
 pep_publish(Config) ->
     escalus:story(Config, [1, 1], fun(Alice, Bob) ->
+        print_c2s_state(Alice),
+        print_c2s_state(Bob),
         %% Send a fake caps presence to make the server ask about
         %% Bob's identity+features.
         escalus:send(Bob, fake_caps_presence(<<"wonderland">>)),
@@ -124,6 +126,8 @@ pep_publish(Config) ->
         %% Discard Bob's broadcasted presence.
         escalus:assert(is_presence_with_type, [<<"available">>],
                       escalus:wait_for_stanza(Bob)),
+        print_c2s_state(Alice),
+        print_c2s_state(Bob),
         %% Publish an event.
         Publish = escalus_stanza:publish(<<"wonderland">>,
                                          wonderful_items()),
@@ -187,3 +191,10 @@ id() ->
     %% Maybe the node value of "wonderland#123456" (where 123456 is the id
     %% sent to the server) must be copied inside the disco#info reply?
     <<"11111">>.
+
+print_c2s_state(#client{jid = Jid}) ->
+    [U,S,R] = [binary_to_list(E)
+               || E <- binary:split(Jid, [<<"@">>, <<"/">>], [global])],
+    Pid = escalus_ejabberd:rpc(ejabberd_sm, get_session_pid, [U,S,R]),
+    State = sys:get_status(Pid),
+    error_logger:info_msg("~s: ~p~n", [Jid, State]).
