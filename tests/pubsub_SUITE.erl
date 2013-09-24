@@ -44,9 +44,13 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
     escalus:end_per_suite(Config).
 
+init_per_group(pep, Config) ->
+    escalus:create_users(Config, {by_name, [alice, bob]});
 init_per_group(_GroupName, Config) ->
     escalus:create_users(Config).
 
+end_per_group(pep, Config) ->
+    escalus:delete_users(Config, {by_name, [alice, bob]});
 end_per_group(_GroupName, Config) ->
     escalus:delete_users(Config).
 
