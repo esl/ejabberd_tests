@@ -115,6 +115,20 @@ publish_test(Config) ->
 %% auto-subscribe and filtered-notifications features.
 pep_publish(Config) ->
     escalus:story(Config, [1, 1], fun(Alice, Bob) ->
+        escalus:send(Bob, escalus_stanza:presence_direct(Alice,
+                                                         <<"subscribe">>)),
+        escalus:assert(is_presence_with_type, [<<"subscribe">>],
+                       escalus:wait_for_stanza(Alice)),
+        escalus:send(Alice, escalus_stanza:presence_direct(Bob,
+                                                           <<"subscribed">>)),
+        %% Discard ask=subscribe (subscription=none) roster push
+        escalus:assert(is_roster_set, escalus:wait_for_stanza(Bob)),
+        %% Discard subscription-to roster push
+        escalus:assert(is_roster_set, escalus:wait_for_stanza(Bob)),
+        escalus:assert(is_presence_with_type, [<<"subscribed">>],
+                       escalus:wait_for_stanza(Bob)),
+        %% Discard subscription from bob@localhost roster push
+        escalus:assert(is_roster_set, escalus:wait_for_stanza(Alice)),
         print_c2s_state(Alice),
         print_c2s_state(Bob),
         %% Send a fake caps presence to make the server ask about
