@@ -115,7 +115,7 @@ publish_test(Config) ->
 %% auto-subscribe and filtered-notifications features.
 pep_publish(Config) ->
     escalus:story(Config, [1, 1], fun(Alice, Bob) ->
-        subscribe(Bob, Alice),
+        subscribe(Alice, Bob),
         print_c2s_state(Alice),
         print_c2s_state(Bob),
         %% Send a fake caps presence to make the server ask about
