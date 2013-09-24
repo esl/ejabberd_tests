@@ -115,20 +115,7 @@ publish_test(Config) ->
 %% auto-subscribe and filtered-notifications features.
 pep_publish(Config) ->
     escalus:story(Config, [1, 1], fun(Alice, Bob) ->
-        escalus:send(Bob, escalus_stanza:presence_direct(Alice,
-                                                         <<"subscribe">>)),
-        escalus:assert(is_presence_with_type, [<<"subscribe">>],
-                       escalus:wait_for_stanza(Alice)),
-        escalus:send(Alice, escalus_stanza:presence_direct(Bob,
-                                                           <<"subscribed">>)),
-        %% Discard ask=subscribe (subscription=none) roster push
-        escalus:assert(is_roster_set, escalus:wait_for_stanza(Bob)),
-        %% Discard subscription-to roster push
-        escalus:assert(is_roster_set, escalus:wait_for_stanza(Bob)),
-        escalus:assert(is_presence_with_type, [<<"subscribed">>],
-                       escalus:wait_for_stanza(Bob)),
-        %% Discard subscription from bob@localhost roster push
-        escalus:assert(is_roster_set, escalus:wait_for_stanza(Alice)),
+        subscribe(Bob, Alice),
         print_c2s_state(Alice),
         print_c2s_state(Bob),
         %% Send a fake caps presence to make the server ask about
@@ -155,6 +142,22 @@ pep_publish(Config) ->
         escalus:wait_for_stanzas(Bob, 10),
         ct:fail(unfinished)
     end).
+
+subscribe(Subscriber, SubscribedTo) ->
+        escalus:send(Subscriber, escalus_stanza:presence_direct(SubscribedTo,
+                                                         <<"subscribe">>)),
+        escalus:assert(is_presence_with_type, [<<"subscribe">>],
+                       escalus:wait_for_stanza(SubscribedTo)),
+        escalus:send(SubscribedTo, escalus_stanza:presence_direct(Subscriber,
+                                                           <<"subscribed">>)),
+        %% Discard ask=subscribe (subscription=none) roster push
+        escalus:assert(is_roster_set, escalus:wait_for_stanza(Subscriber)),
+        %% Discard subscription-to roster push
+        escalus:assert(is_roster_set, escalus:wait_for_stanza(Subscriber)),
+        escalus:assert(is_presence_with_type, [<<"subscribed">>],
+                       escalus:wait_for_stanza(Subscriber)),
+        %% Discard subscription from bob@localhost roster push
+        escalus:assert(is_roster_set, escalus:wait_for_stanza(SubscribedTo)).
 
 %%--------------------------------------------------------------------
 %% Helpers
