@@ -122,15 +122,20 @@ pep_publish(Config) ->
         %% Bob's identity+features.
         escalus:send(Bob, fake_caps_presence(<<"wonderland">>)),
         %% Ensure the server sends expected disco#info.
-        DiscoInfo = escalus:wait_for_stanza(Bob),
-        escalus:assert(is_disco_info, DiscoInfo),
+        %DiscoInfo = escalus:wait_for_stanza(Bob),
+        %escalus:assert(is_disco_info, DiscoInfo),
         %% Send the identity+features.
-        escalus:send(Bob, pc_client_info(DiscoInfo,
-                                         [<<"wonderland">>,
-                                          <<"wonderland+notify">>])),
+        %escalus:send(Bob, pc_client_info(DiscoInfo,
+        %                                 [<<"wonderland">>,
+        %                                  <<"wonderland+notify">>])),
         %% Discard Bob's broadcasted presence.
         escalus:assert(is_presence_with_type, [<<"available">>],
                       escalus:wait_for_stanza(Bob)),
+        escalus:assert(is_presence_with_type, [<<"available">>],
+                      escalus:wait_for_stanza(Alice)),
+        %% No idea why there's another one for Alice...
+        escalus:assert(is_presence_with_type, [<<"available">>],
+                      escalus:wait_for_stanza(Alice)),
         print_c2s_state(Alice),
         print_c2s_state(Bob),
         %% Publish an event.
@@ -139,8 +144,7 @@ pep_publish(Config) ->
         escalus:send(Alice, Publish),
         escalus:assert(is_publish_result, [<<"wonderland">>],
                        escalus:wait_for_stanza(Alice)),
-        escalus:wait_for_stanzas(Bob, 10),
-        ct:fail(unfinished)
+        escalus:assert(is_pubsub_event, escalus:wait_for_stanza(Bob))
     end).
 
 subscribe(Subscriber, SubscribedTo) ->
