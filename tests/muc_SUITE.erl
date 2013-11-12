@@ -2270,7 +2270,8 @@ send_private_groupchat(Config) ->
 % Fails - no 110 status code 
 change_nickname(Config) ->
     escalus:story(Config, [1, 1, 1], fun(_Alice,  Bob, Eve) ->
-        escalus:send(Bob, stanza_muc_enter_room(?config(room, Config), escalus_utils:get_username(Bob))),
+        BobNick = escalus_utils:get_username(Bob),
+        escalus:send(Bob, stanza_muc_enter_room(?config(room, Config), BobNick)),
         escalus:wait_for_stanzas(Bob, 2),
         escalus:send(Eve, stanza_muc_enter_room(?config(room, Config), escalus_utils:get_username(Eve))),
         escalus:wait_for_stanza(Bob),
@@ -2279,8 +2280,8 @@ change_nickname(Config) ->
         escalus:send(Bob, stanza_change_nick(?config(room, Config), <<"newbob">>)),
         Presence = escalus:wait_for_stanza(Bob),
 		has_status_codes(Presence, [<<"110">>]),
-        is_nick_unavailable_correct(?config(room, Config), <<"bob">>, <<"newbob">>, escalus:wait_for_stanza(Eve)),
-        is_nick_unavailable_correct(?config(room, Config), <<"bob">>, <<"newbob">>, Presence),
+        is_nick_unavailable_correct(?config(room, Config), BobNick, <<"newbob">>, escalus:wait_for_stanza(Eve)),
+        is_nick_unavailable_correct(?config(room, Config), BobNick, <<"newbob">>, Presence),
         is_nick_update_correct(?config(room, Config), <<"newbob">>, escalus:wait_for_stanza(Eve)),
         Presence2 = escalus:wait_for_stanza(Bob),
         is_nick_update_correct(?config(room, Config), <<"newbob">>, Presence2),
@@ -2824,8 +2825,8 @@ configure(Config) ->
 configure_logging(Config) ->
     escalus:story(Config, [1,1,1], fun(Alice, Bob, Kate) ->
         %% Bob joins room
-        escalus:send(Bob, stanza_muc_enter_room(?config(room, Config), <<"bob">>)),
-        escalus:send(Kate, stanza_muc_enter_room(?config(room, Config), <<"kate">>)),
+        escalus:send(Bob, stanza_muc_enter_room(?config(room, Config), escalus_utils:get_username(Bob))),
+        escalus:send(Kate, stanza_muc_enter_room(?config(room, Config), escalus_utils:get_username(Kate))),
         escalus:wait_for_stanzas(Bob, 3),
         escalus:wait_for_stanzas(Kate, 3),
 
