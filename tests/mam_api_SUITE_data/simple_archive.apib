@@ -1,0 +1,9 @@
+# 1. Simple GET of archive for a given hostname, username pair
+
+GET /api/archive/host/{{<host}}/username/{{<username}}
+> Accept: application/json
+> User-Agent: katt
+> Host: {{<hostname}}:{{<port}}
+< 200
+< Content-Type: application/json
+{}
