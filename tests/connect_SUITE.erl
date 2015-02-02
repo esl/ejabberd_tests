@@ -40,12 +40,15 @@ all() ->
         _ ->
 
             [{group, starttls},
-                {group, tls}]
+             {group, tls}]
+            %% [{group, features_order}]
     end.
 
 groups() ->
     [{starttls, test_cases()},
      {tls, generate_tls_vsn_tests()}].
+    %% [{features_order, [%%compression_should_not_be_available_before_sasl,
+    %%                    compression_should_be_available_after_sasl]}].
 
 test_cases() ->
     generate_tls_vsn_tests() ++
@@ -82,7 +85,12 @@ init_per_group(tls, Config) ->
     JoeSpec = lists:keydelete(starttls, 1, proplists:get_value(?SECURE_USER, Users)),
     JoeSpec2 = {?SECURE_USER, lists:keystore(ssl, 1, JoeSpec, {ssl, true})},
     NewUsers = lists:keystore(?SECURE_USER, 1, Users, JoeSpec2),
-    lists:keystore(escalus_users, 1, Config, {escalus_users, NewUsers}).
+    lists:keystore(escalus_users, 1, Config, {escalus_users, NewUsers});
+init_per_group(features_order, Config) ->
+    ConfigFileMods = [mk_value_for_starttls_required_config_pattern()],
+                      %% mk_value_for_zlib_config_pattern()],
+    ejabberd_node_utils:modify_config_file(ConfigFileMods, Config),
+    ejabberd_node_utils:restart_application(ejabberd).
 
 end_per_group(_, Config) ->
     Config.
@@ -147,6 +155,29 @@ should_fail_to_authenticate_without_starttls(Config) ->
                            AuthReply)
     end.
 
+compression_should_not_be_available_before_sasl(Config) ->
+    %% GIVEN
+    %% stream compression enabled AND
+    UserSpec0 = escalus_users:get_userspec(Config, ?SECURE_USER),
+    UserSpec1 = set_secure_connection_protocol(UserSpec0, tlsv1),
+
+    %% WHEN
+    Features = start_stream_and_get_features(UserSpec1),
+
+    %% THEN
+    ?assertMatch(false, proplists:get_value(compression, Features)).
+
+compression_should_be_available_after_sasl(Config) ->
+    %% GIVEN
+    UserSpec0 = escalus_users:get_userspec(Config, ?SECURE_USER),
+    UserSpec1 = set_secure_connection_protocol(UserSpec0, tlsv1),
+
+    %% WHEN
+    Features = start_stream_authenticate_and_get_features(UserSpec1),
+
+    %% THEN
+    ?assertMatch([<<"zlib">>], proplists:get_value(compression, Features)).
+
 %%--------------------------------------------------------------------
 %% Internal functions
 %%--------------------------------------------------------------------
@@ -169,13 +200,33 @@ mk_value_for_tls_config_pattern() ->
 mk_value_for_starttls_required_config_pattern() ->
     {tls_config, "{certfile, \"" ++ ?CERT_FILE ++ "\"}, starttls_required,"}.
 
+mk_value_for_zlib_config_pattern() ->
+    {zlib, "{zlib, 10000},"}.
+
 set_secure_connection_protocol(UserSpec, Version) ->
     [{ssl_opts, [{versions, [Version]}]} | UserSpec].
 
 start_stream_with_compression(UserSpec) ->
     ConnetctionSteps = [start_stream, stream_features, maybe_use_compression],
     {ok, Conn, Props, Features} = escalus_connection:start(UserSpec,
-                                                            ConnetctionSteps),
+                                                           ConnetctionSteps),
     {Conn, Props, Features}.
+
+start_stream_and_get_features(UserSpec) ->
+    ConnetctionSteps = [start_stream, stream_features],
+    {ok, _Conn, _Prop, Features} = escalus_connection:start(UserSpec,
+                                                            ConnetctionSteps),
+    Features.
+
+start_stream_authenticate_and_get_features(UserSpec) ->
+    ConnetctionSteps = [start_stream,
+    stream_features,
+    maybe_use_ssl,
+    maybe_use_compression,
+    authenticate],
+    %% ConnetctionSteps = [start_stream, stream_features, maybe_use_ssl, authenticate],
+    {ok, _Conn, _Prop, Features} = escalus_connection:start(UserSpec,
+                                                            ConnetctionSteps),
+    Features.
 
 
