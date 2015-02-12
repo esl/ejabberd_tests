@@ -72,17 +72,3 @@ DELETE /api/users/host/{{<host}}/username/{{<username}}
 > User-Agent: katt
 > Host: {{<hostname}}:{{<port}}
 < 204
-
-# 7. Fetch list one more time
-
-GET /api/users/host/{{<host}}
-> Accept: application/json
-> User-Agent: katt
-> Host: {{<hostname}}:{{<port}}
-< 200
-< Content-Type: application/json
-{
-    "count": "{{<user_count_1}}",
-    "users": [],
-    "{{_}}": "{{unexpected}}"
-}
