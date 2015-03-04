@@ -143,6 +143,7 @@ configurations() ->
      odbc_mult_cache,
      odbc_mnesia_cache,
      odbc_mnesia_muc_cache,
+     riak_timed_buckets,
      ca].
 
 basic_group_names() ->
@@ -162,7 +163,7 @@ basic_group_names() ->
 
 all() ->
     Reasons =
-    case is_odbc_enabled(host()) of
+    case is_mam_possible(host())  of
         false -> [require_odbc];
         true  -> []
     end,
@@ -183,9 +184,12 @@ groups() ->
      || C <- configurations(), {G, Props, Tests} <- basic_groups(),
         not is_skipped(C, G)].
 
-is_skipped(odbc_mnesia_muc_cache, muc)         -> false;
-is_skipped(odbc_mnesia_muc_cache, muc_with_pm) -> false;
-is_skipped(odbc_mnesia_muc_cache, muc_rsm)     -> false;
+is_skipped(odbc_mnesia_muc_cache = C, muc)         ->
+    is_configuration_skipped(C) orelse false;
+is_skipped(odbc_mnesia_muc_cache = C, muc_with_pm) ->
+    is_configuration_skipped(C) orelse false;
+is_skipped(odbc_mnesia_muc_cache = C, muc_rsm)     ->
+    is_configuration_skipped(C) orelse false;
 is_skipped(C, _) -> is_configuration_skipped(C).
 
 is_configuration_skipped(C) ->
@@ -481,6 +485,12 @@ init_modules(ca, _, Config) ->
     init_module(host(), mod_mam_odbc_user, [pm]),
     init_module(host(), mod_mam, []),
     Config;
+init_modules(riak_timed_buckets, _, Config) ->
+    init_module(host(), mod_mam_riak_timed_arch, [pm]),
+    init_module(host(), mod_mam_odbc_prefs, [pm]),
+    init_module(host(), mod_mam_odbc_user, [pm]),
+    init_module(host(), mod_mam, []),
+    Config;
 init_modules(odbc_async, _, Config) ->
     init_module(host(), mod_mam, []),
     init_module(host(), mod_mam_odbc_arch, [pm, no_writer]),
@@ -556,7 +566,8 @@ mam_modules() ->
      mod_mam_odbc_user,
      mod_mam_odbc_server_user,
      mod_mam_cache_user,
-     mod_mam_muc_cache_user].
+     mod_mam_muc_cache_user,
+     mod_mam_riak_timed_arch].
 
 init_state(_, muc_rsm, Config) ->
     Config1 = start_alice_room(Config),
@@ -2122,11 +2133,22 @@ restore_dump_file(ArcJID, FileName, Opts) ->
 muc_restore_dump_file(ArcJID, FileName, Opts) ->
     rpc_apply(mod_mam_muc, restore_dump_file, [ArcJID, FileName, Opts]).
 
+is_mam_possible(Host) ->
+    is_odbc_enabled(Host) orelse is_riak_enabled(Host).
+
 is_odbc_enabled(Host) ->
     case sql_transaction(Host, fun erlang:now/0) of
         {atomic, _} -> true;
         Other ->
             ct:pal("ODBC disabled (check failed ~p)", [Other]),
+            false
+    end.
+
+is_riak_enabled(_Host) ->
+    case escalus_ejabberd:rpc(mongoose_riak, get_worker, []) of
+        Pid when is_pid(Pid) ->
+            true;
+        _ ->
             false
     end.
 
