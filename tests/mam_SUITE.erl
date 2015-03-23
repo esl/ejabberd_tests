@@ -51,6 +51,7 @@
          pagination_last25_opt_count_all/1,
          pagination_offset5_opt_count/1,
          pagination_offset5_opt_count_all/1,
+         pagination_complete_attribute/1,
          archived/1,
          strip_archived/1,
          filter_forwarded/1,
@@ -62,7 +63,8 @@
          querying_for_all_messages_with_jid/1,
          muc_querying_for_all_messages/1,
          muc_querying_for_all_messages_with_jid/1,
-         iq_spoofing/1]).
+         iq_spoofing/1,
+         get_form_fields/1]).
 
 -include_lib("escalus/include/escalus.hrl").
 -include_lib("escalus/include/escalus_xmlns.hrl").
@@ -99,14 +101,15 @@
     message_body   :: binary() | undefined
 }).
 
--record(result_iq, {
+-record(result_fin, {
     from            :: binary(),
     to              :: binary(),
     id              :: binary(),
     first           :: binary() | undefined,
     first_index     :: non_neg_integer() | undefined,
     last            :: binary() | undefined,
-    count           :: non_neg_integer()
+    count           :: non_neg_integer(),
+    complete        :: boolean()
 }).
 
 -record(error_iq, {
@@ -219,7 +222,8 @@ mam_cases() ->
      limit_archive_request,
      prefs_set_request,
      prefs_set_cdata_request,
-     iq_spoofing].
+     iq_spoofing,
+     get_form_fields].
 
 mam_purge_cases() ->
     [purge_single_message,
@@ -256,6 +260,7 @@ rsm_cases() ->
        pagination_before10,
        pagination_after10,
        pagination_empty_rset,
+       pagination_complete_attribute,
        %% Border cases
        pagination_last_after_id5,
        pagination_last_after_id5_before_id11,
@@ -299,7 +304,7 @@ init_per_group(Group, Config) ->
         Config1 ->
             init_state(C, B, Config1)
     end.
-    
+
 end_per_group(Group, Config) ->
     C = configuration(Group),
     B = basic_group(Group),
@@ -730,7 +735,7 @@ simple_archive_request(Config) ->
         %%   [{xmlel,<<"body">>,[],[{xmlcdata,<<"OH, HAI!">>}]}]}
         escalus:send(Alice, escalus_stanza:chat_to(Bob, <<"OH, HAI!">>)),
         escalus:send(Alice, stanza_archive_request(<<"q1">>)),
-        assert_respond_size(1, wait_archive_respond_iq_first(Alice)),
+        assert_respond_size(1, wait_archive_respond_fin_first(Alice)),
         ok
         end,
     escalus:story(Config, [1, 1], F).
@@ -739,7 +744,7 @@ querying_for_all_messages_with_jid(Config) ->
     F = fun(Alice) ->
         BWithJID = nick_to_jid(bob, Config),
         escalus:send(Alice, stanza_filtered_by_jid_request(BWithJID)),
-        assert_respond_size(12, wait_archive_respond_iq_first(Alice)),
+        assert_respond_size(12, wait_archive_respond_fin_first(Alice)),
         ok
         end,
     escalus:story(Config, [1], F).
@@ -751,7 +756,7 @@ muc_querying_for_all_messages(Config) ->
 
         IQ = stanza_archive_request(<<>>),
         escalus:send(Alice, stanza_to_room(IQ, Room)),
-        assert_respond_size(12, wait_archive_respond_iq_first(Alice)),
+        assert_respond_size(12, wait_archive_respond_fin_first(Alice)),
 
         ok
         end,
@@ -764,7 +769,7 @@ muc_querying_for_all_messages_with_jid(Config) ->
 
         IQ = stanza_filtered_by_jid_request(BWithJID),
         escalus:send(Alice, stanza_to_room(IQ, Room)),
-        assert_respond_size(6, wait_archive_respond_iq_first(Alice)),
+        assert_respond_size(6, wait_archive_respond_fin_first(Alice)),
         ok
         end,
     escalus:story(Config, [1, 1], F).
@@ -788,7 +793,7 @@ archived(Config) ->
 
         %% Bob calls archive.
         escalus:send(Bob, stanza_archive_request(<<"q1">>)),
-        [_ArcIQ, ArcMsg] = assert_respond_size(1, wait_archive_respond_iq_first(Bob)),
+        [_ArcIQ, ArcMsg] = assert_respond_size(1, wait_archive_respond_fin_first(Bob)),
         #forwarded_message{result_id=ArcId} = parse_forwarded_message(ArcMsg),
         ?assert_equal(Id, ArcId),
         ok
@@ -809,11 +814,11 @@ filter_forwarded(Config) ->
         escalus:wait_for_stanza(Bob),
 
         escalus:send(Bob, stanza_archive_request(<<"q1">>)),
-        [_ArcIQ1, _ArcMsg1] = assert_respond_size(1, wait_archive_respond_iq_first(Bob)),
+        [_ArcIQ1, _ArcMsg1] = assert_respond_size(1, wait_archive_respond_fin_first(Bob)),
 
         %% Check, that previous forwarded message was not archived.
         escalus:send(Bob, stanza_archive_request(<<"q2">>)),
-        [_ArcIQ2, _ArcMsg2] = assert_respond_size(1, wait_archive_respond_iq_first(Bob)),
+        [_ArcIQ2, _ArcMsg2] = assert_respond_size(1, wait_archive_respond_fin_first(Bob)),
         ok
         end,
     escalus:story(Config, [1, 1], F).
@@ -840,7 +845,7 @@ strip_archived(Config) ->
         try
         %% Bob calls archive.
         escalus:send(Bob, stanza_archive_request(<<"q1">>)),
-        [_ArcIQ, ArcMsg] = assert_respond_size(1, wait_archive_respond_iq_first(Bob)),
+        [_ArcIQ, ArcMsg] = assert_respond_size(1, wait_archive_respond_fin_first(Bob)),
         #forwarded_message{result_id=ArcId} = parse_forwarded_message(ArcMsg),
         ?assert_equal(ArcId, Id),
         ok
@@ -852,10 +857,12 @@ strip_archived(Config) ->
         end,
     escalus:story(Config, [1, 1], F).
 
-wait_archive_respond_iq_first(User) ->
+wait_archive_respond_fin_first(User) ->
+    IQResult = escalus:wait_for_stanza(User, 5000),
+    escalus:assert(is_iq, [<<"result">>], IQResult),
     %% rot1
-    [IQ|Messages] = lists:reverse(wait_archive_respond(User)),
-    [IQ|lists:reverse(Messages)].
+    [Fin|Messages] = lists:reverse(wait_archive_respond(User)),
+    [Fin|lists:reverse(Messages)].
 
 wait_archive_respond(User) ->
     S = escalus:wait_for_stanza(User, 5000),
@@ -865,7 +872,7 @@ wait_archive_respond(User) ->
             ct:fail("Unexpected error IQ.", []);
         false -> ok
     end,
-    case escalus_pred:is_iq_result(S) of
+    case escalus_pred:is_mam_fin_message(S) of
         true  -> [S];
         false -> [S|wait_archive_respond(User)]
     end.
@@ -881,7 +888,7 @@ assert_respond_size(ExpectedSize, Respond) ->
 %% stanzas may be pushed to a client in one request.
 %% If a query returns a number of stanzas greater than this limit and
 %% the client did not specify a limit using RSM then the server should
-%% return a policy-violation error to the client. 
+%% return a policy-violation error to the client.
 policy_violation(Config) ->
     F = fun(Alice, Bob) ->
         %% Alice sends messages to Bob.
@@ -919,7 +926,7 @@ offline_message(Config) ->
 
     %% Bob logs in
     Bob = login_send_presence(Config, bob),
-    
+
     %% If mod_offline is enabled, then an offline message
     %% will be delivered automatically.
 
@@ -928,7 +935,7 @@ offline_message(Config) ->
 
     %% Bob checks his archive.
     escalus:send(Bob, stanza_archive_request(<<"q1">>)),
-    [_ArcRes, ArcMsg] = wait_archive_respond_iq_first(Bob),
+    [_ArcFin, ArcMsg] = wait_archive_respond_fin_first(Bob),
     #forwarded_message{message_body=ArcMsgBody} =
         parse_forwarded_message(ArcMsg),
     ?assert_equal(Msg, ArcMsgBody),
@@ -939,14 +946,14 @@ purge_single_message(Config) ->
     F = fun(Alice, Bob) ->
             escalus:send(Alice, escalus_stanza:chat_to(Bob, <<"OH, HAI!">>)),
             escalus:send(Alice, stanza_archive_request(<<"q1">>)),
-            [_IQ, Mess] = assert_respond_size(1, wait_archive_respond_iq_first(Alice)),
+            [_IQ, Mess] = assert_respond_size(1, wait_archive_respond_fin_first(Alice)),
             ParsedMess = parse_forwarded_message(Mess),
             #forwarded_message{result_id=MessId} = ParsedMess,
             escalus:send(Alice, stanza_purge_single_message(MessId)),
             %% Waiting for ack.
             escalus:assert(is_iq_result, escalus:wait_for_stanza(Alice)),
             escalus:send(Alice, stanza_archive_request(<<"q2">>)),
-            assert_respond_size(0, wait_archive_respond_iq_first(Alice)),
+            assert_respond_size(0, wait_archive_respond_fin_first(Alice)),
             ok
         end,
     escalus:story(Config, [1, 1], F).
@@ -954,8 +961,8 @@ purge_single_message(Config) ->
 purge_old_single_message(Config) ->
     F = fun(Alice) ->
             escalus:send(Alice, stanza_archive_request(<<"q1">>)),
-            [_IQ|AllMessages] = assert_respond_size(12,
-                wait_archive_respond_iq_first(Alice)),
+            [_Fin|AllMessages] = assert_respond_size(12,
+                wait_archive_respond_fin_first(Alice)),
             ParsedMessages = [parse_forwarded_message(M) || M <- AllMessages],
             %% Delete fifth message.
             ParsedMess = lists:nth(5, ParsedMessages),
@@ -965,7 +972,7 @@ purge_old_single_message(Config) ->
             escalus:assert(is_iq_result, escalus:wait_for_stanza(Alice)),
             %% Check, that it was deleted.
             escalus:send(Alice, stanza_archive_request(<<"q2">>)),
-            assert_respond_size(11, wait_archive_respond_iq_first(Alice)),
+            assert_respond_size(11, wait_archive_respond_fin_first(Alice)),
             ok
         end,
     escalus:story(Config, [1], F).
@@ -977,16 +984,32 @@ purge_multiple_messages(Config) ->
                 escalus:send(Alice,
                     escalus_stanza:chat_to(Bob, generate_message_text(N))),
                  timer:sleep(100)
-             end || N <- lists:seq(1, 15)],
+             end || N <- lists:seq(1, 7)],
+            timer:sleep(3000),
+            [begin
+                escalus:send(Alice,
+                    escalus_stanza:chat_to(Bob, generate_message_text(N))),
+                 timer:sleep(100)
+             end || N <- lists:seq(8, 15)],
             %% Bob is waiting for 15 messages for 5 seconds.
             escalus:wait_for_stanzas(Bob, 15, 5000),
-            %% Bob purges all messages from his archive.
+
+            escalus:send(Bob, stanza_archive_request(<<"q1">>)),
+            [_Fin|AllMessages] = assert_respond_size(15,
+                wait_archive_respond_fin_first(Bob)),
+            ParsedMessages = [parse_forwarded_message(M) || M <- AllMessages],
+            StartMessage = lists:nth(1, ParsedMessages),
+            EndMessage   = lists:nth(8, ParsedMessages),
+            #forwarded_message{delay_stamp = Start} = StartMessage,
+            #forwarded_message{delay_stamp = End} = EndMessage,
+
+            %% Bob purges 7 messages from his archive.
             escalus:send(Bob, stanza_purge_multiple_messages(
-                    undefined, undefined, undefined)),
+                    Start, End, undefined)),
             %% Waiting for ack.
             escalus:assert(is_iq_result, escalus:wait_for_stanza(Bob)),
             escalus:send(Bob, stanza_archive_request(<<"q2">>)),
-            assert_respond_size(0, wait_archive_respond_iq_first(Bob)),
+            assert_respond_size(8, wait_archive_respond_fin_first(Bob)),
             ok
         end,
     escalus:story(Config, [1, 1], F).
@@ -1021,7 +1044,7 @@ muc_archive_request(Config) ->
 
         %% Bob requests the room's archive.
         escalus:send(Bob, stanza_to_room(stanza_archive_request(<<"q1">>), Room)),
-        [_ArcRes, ArcMsg] = assert_respond_size(1, wait_archive_respond_iq_first(Bob)),
+        [_ArcRes, ArcMsg] = assert_respond_size(1, wait_archive_respond_fin_first(Bob)),
         #forwarded_message{result_id=ArcId, message_body=ArcMsgBody} =
             parse_forwarded_message(ArcMsg),
         ?assert_equal(Text, ArcMsgBody),
@@ -1084,7 +1107,7 @@ muc_multiple_devices(Config) ->
 
         %% Bob requests the room's archive.
         escalus:send(Bob, stanza_to_room(stanza_archive_request(<<"q1">>), Room)),
-        [_ArcRes, ArcMsg] = assert_respond_size(1, wait_archive_respond_iq_first(Bob)),
+        [_ArcRes, ArcMsg] = assert_respond_size(1, wait_archive_respond_fin_first(Bob)),
         #forwarded_message{result_id=ArcId, message_body=ArcMsgBody} =
             parse_forwarded_message(ArcMsg),
         ?assert_equal(Text, ArcMsgBody),
@@ -1125,7 +1148,7 @@ muc_private_message(Config) ->
 
         %% Bob requests the room's archive.
         escalus:send(Bob, stanza_to_room(stanza_archive_request(<<"q1">>), Room)),
-        [_ArcRes] = assert_respond_size(0, wait_archive_respond_iq_first(Bob)),
+        [_ArcRes] = assert_respond_size(0, wait_archive_respond_fin_first(Bob)),
         ok
         end,
     escalus:story(Config, [1, 1], F).
@@ -1134,15 +1157,30 @@ muc_private_message(Config) ->
 range_archive_request(Config) ->
     F = fun(Alice) ->
         %% Send
-        %% <iq type='get'>
-        %%   <query xmlns='urn:xmpp:mam:tmp'>
-        %%     <start>2010-06-07T00:00:00Z</start>
-        %%     <end>2010-07-07T13:23:54Z</end>
+        %% <iq type='set'>
+        %%   <query xmlns='urn:xmpp:mam:0'>
+        %%        <x xmlns='jabber:x:data'>
+        %%          <field var='FORM_TYPE'>
+        %%             <value>urn:xmpp:mam:0</value>
+        %%          </field>
+        %%          <field var='start'>
+        %%             <value>>2010-06-07T00:00:00Z</value>
+        %%          </field>
+        %%          <field var='end'>
+        %%             <value>2010-07-07T13:23:54Z</value>
+        %%          </field>
+        %%       </x>
+        %%       <set xmlns='http://jabber.org/protocol/rsm'>
+        %%          <limit>10</limit>
+        %%       </set>
         %%   </query>
         %% </iq>
+
         escalus:send(Alice, stanza_date_range_archive_request()),
         IQ = escalus:wait_for_stanza(Alice, 5000),
         escalus:assert(is_iq_result, IQ),
+        Fin = escalus:wait_for_stanza(Alice, 5000),
+        escalus:assert(is_mam_fin_message, Fin),
         ok
         end,
     escalus:story(Config, [1], F).
@@ -1150,10 +1188,19 @@ range_archive_request(Config) ->
 range_archive_request_not_empty(Config) ->
     F = fun(Alice) ->
         %% Send
-        %% <iq type='get'>
-        %%   <query xmlns='urn:xmpp:mam:tmp'>
-        %%     <start>2000-07-21T01:50:14Z</start>
-        %%     <end>2000-07-21T01:50:16Z</end>
+        %% <iq type='set'>
+        %%   <query xmlns='urn:xmpp:mam:0'>
+        %%        <x xmlns='jabber:x:data'>
+        %%          <field var='FORM_TYPE'>
+        %%             <value>urn:xmpp:mam:0</value>
+        %%          </field>
+        %%          <field var='start'>
+        %%             <value>2000-07-21T01:50:14Z</value>
+        %%          </field>
+        %%          <field var='end'>
+        %%             <value>2000-07-21T01:50:16Z</value>
+        %%          </field>
+        %%       </x>
         %%   </query>
         %% </iq>
         escalus:send(Alice, stanza_date_range_archive_request_not_empty()),
@@ -1175,9 +1222,16 @@ range_archive_request_not_empty(Config) ->
 limit_archive_request(Config) ->
     F = fun(Alice) ->
         %% Send
-        %% <iq type='get' id='q29302'>
-        %%   <query xmlns='urn:xmpp:mam:tmp'>
-        %%       <start>2010-08-07T00:00:00Z</start>
+        %% <iq type='set' id='q29302'>
+        %%   <query xmlns='urn:xmpp:mam:0'>
+        %%        <x xmlns='jabber:x:data'>
+        %%          <field var='FORM_TYPE'>
+        %%             <value>urn:xmpp:mam:0</value>
+        %%          </field>
+        %%          <field var='start'>
+        %%             <value>2010-06-07T00:00:00Z</value>
+        %%          </field>
+        %%       </x>
         %%       <set xmlns='http://jabber.org/protocol/rsm'>
         %%          <limit>10</limit>
         %%       </set>
@@ -1353,6 +1407,21 @@ pagination_last_after_id5_before_id11(Config) ->
         end,
     escalus:story(Config, [1], F).
 
+pagination_complete_attribute(Config) ->
+    F = fun(Alice)->
+            RSM = #rsm_in{max=5},
+            rsm_send(Config, Alice,
+                stanza_page_archive_request(<<"not_complete">>, RSM)),
+            wait_message_range(Alice, 15, 0, 1, 5),
+
+            RSM2 = #rsm_in{index=10, max=5},
+            rsm_send(Config, Alice,
+                stanza_page_archive_request(<<"complete">>, RSM2)),
+            wait_message_range(Alice, 15, 10, 11, 15),
+            ok
+        end,
+    escalus:story(Config, [1], F).
+
 generate_message_text(N) when is_integer(N) ->
     <<"Message #", (list_to_binary(integer_to_list(N)))/binary>>.
 
@@ -1377,9 +1446,9 @@ rsm_send_1(Config, User, Packet) ->
 prefs_set_request(Config) ->
     F = fun(Alice) ->
         %% Send
-        %% 
+        %%
         %% <iq type='set' id='juliet2'>
-        %%   <prefs xmlns='urn:xmpp:mam:tmp' default="roster">
+        %%   <prefs xmlns='urn:xmpp:mam:0' default="roster">
         %%     <always>
         %%       <jid>romeo@montague.net</jid>
         %%     </always>
@@ -1410,9 +1479,9 @@ prefs_set_request(Config) ->
 prefs_set_cdata_request(Config) ->
     F = fun(Alice) ->
         %% Send
-        %% 
+        %%
         %% <iq type='set' id='juliet2'>
-        %%   <prefs xmlns='urn:xmpp:mam:tmp' default="roster">
+        %%   <prefs xmlns='urn:xmpp:mam:0' default="roster">
         %%     <always>
         %%       <jid>romeo@montague.net</jid>
         %%       <jid>montague@montague.net</jid>
@@ -1482,6 +1551,37 @@ iq_spoofing(Config) ->
         end,
     escalus:story(Config, [1,1], F).
 
+get_form_fields(Config) ->
+    F = fun(Alice) ->
+                escalus:send(Alice, stanza_retrieve_form_fields()),
+                Stanza = escalus:wait_for_stanza(Alice),
+                escalus:assert(is_iq_with_ns, [?NS_MAM], Stanza),
+                escalus:assert(has_field_with_type,
+                               [<<"FORM_TYPE">>, <<"hidden">>], Stanza),
+                escalus:assert(has_field_with_type,
+                               [<<"with">>, <<"jid-single">>], Stanza),
+                escalus:assert(has_field_with_type,
+                               [<<"start">>, <<"text-single">>], Stanza),
+                escalus:assert(has_field_with_type,
+                               [<<"end">>, <<"text-single">>], Stanza),
+                escalus:assert(has_field_with_type,
+                               [<<"before_id">>, <<"text-single">>], Stanza),
+                escalus:assert(has_field_with_type,
+                               [<<"after_id">>, <<"text-single">>], Stanza),
+                escalus:assert(has_field_with_type,
+                               [<<"from_id">>, <<"text-single">>], Stanza),
+                escalus:assert(has_field_with_type,
+                               [<<"to_id">>, <<"text-single">>], Stanza),
+                escalus:assert(has_field_with_type,
+                               [<<"simple">>, <<"boolean">>], Stanza),
+                escalus:assert(has_field_with_type,
+                               [<<"opt_count">>, <<"boolean">>], Stanza),
+                escalus:assert(has_field_value,
+                               [<<"FORM_TYPE">>, ?NS_MAM], Stanza),
+                ok
+        end,
+    escalus:story(Config, [1], F).
+
 result_iq() ->
     #xmlel{
         name = <<"iq">>,
@@ -1494,7 +1594,7 @@ result_iq() ->
 
 nick(User) -> escalus_utils:get_username(User).
 
-mam_ns_binary() -> <<"urn:xmpp:mam:tmp">>.
+mam_ns_binary() -> <<"urn:xmpp:mam:0">>.
 muc_ns_binary() -> <<"http://jabber.org/protocol/muc">>.
 
 stanza_purge_single_message(MessId) ->
@@ -1504,13 +1604,18 @@ stanza_purge_single_message(MessId) ->
     }]).
 
 stanza_purge_multiple_messages(BStart, BEnd, BWithJID) ->
+    FormFields = skip_undefined([ field_el(<<"FORM_TYPE">>, <<"hidden">>, ?NS_MAM),
+                                  maybe_start_elem(BStart),
+                                  maybe_end_elem(BEnd),
+                                  maybe_with_elem(BWithJID)
+                                ]) ,
+    Form = #xmlel{name = <<"x">>,
+                  attrs = [{<<"xmlns">>, <<"jabber:x:data">>}],
+                  children = FormFields },
     escalus_stanza:iq(<<"set">>, [#xmlel{
        name = <<"purge">>,
        attrs = [{<<"xmlns">>,mam_ns_binary()}],
-       children = skip_undefined([
-           maybe_start_elem(BStart),
-           maybe_end_elem(BEnd),
-           maybe_with_elem(BWithJID)])
+       children = [Form]
     }]).
 
 skip_undefined(Xs) ->
@@ -1527,23 +1632,17 @@ mam_ns_attr() ->
 maybe_start_elem(undefined) ->
     undefined;
 maybe_start_elem(BStart) ->
-    #xmlel{
-        name = <<"start">>,
-        children = #xmlcdata{content = BStart}}.
+    field_el(<<"start">>, <<"text-single">>, BStart).
 
 maybe_end_elem(undefined) ->
     undefined;
 maybe_end_elem(BEnd) ->
-    #xmlel{
-        name = <<"end">>,
-        children = #xmlcdata{content = BEnd}}.
+    field_el(<<"end">>, <<"text-single">>, BEnd).
 
 maybe_with_elem(undefined) ->
     undefined;
 maybe_with_elem(BWithJID) ->
-    #xmlel{
-        name = <<"with">>,
-        children = #xmlcdata{content = BWithJID}}.
+    field_el(<<"with">>, <<"text-single">>, BWithJID).
 
 %% An optional 'queryid' attribute allows the client to match results to
 %% a certain query.
@@ -1575,27 +1674,41 @@ stanza_filtered_by_jid_request(BWithJID) ->
                               undefined, BWithJID, undefined).
 
 stanza_lookup_messages_iq(QueryId, BStart, BEnd, BWithJID, RSM) ->
-    escalus_stanza:iq(<<"get">>, [#xmlel{
+    FormFields = skip_undefined([
+                                 field_el(<<"FORM_TYPE">>, <<"hidden">>, ?NS_MAM),
+                                 maybe_simple_elem(RSM),
+                                 maybe_opt_count_elem(RSM),
+                                 maybe_start_elem(BStart),
+                                 maybe_end_elem(BEnd),
+                                 maybe_with_elem(BWithJID)
+                                ]) ++ border_attributes(RSM) ,
+
+    Form = #xmlel{name = <<"x">>,
+                  attrs = [{<<"xmlns">>, <<"jabber:x:data">>}],
+                  children = FormFields },
+    escalus_stanza:iq(<<"set">>, [#xmlel{
        name = <<"query">>,
        attrs = mam_ns_attr()
-            ++ maybe_attr(<<"queryid">>, QueryId)
-            ++ border_attributes(RSM),
-       children = skip_undefined([
-           maybe_simple_elem(RSM),
-           maybe_opt_count_elem(RSM),
-           maybe_start_elem(BStart),
-           maybe_end_elem(BEnd),
-           maybe_with_elem(BWithJID),
-           maybe_rsm_elem(RSM)])
+            ++ maybe_attr(<<"queryid">>, QueryId),
+       children = [Form |skip_undefined([maybe_rsm_elem(RSM)])]
     }]).
 
+field_el(_Name, _Type, undefined) ->
+    undefined;
+field_el(Name, Type, Value) ->
+    #xmlel{name = <<"field">>,
+           attrs = [{<<"type">>, Type},
+                    {<<"var">>, Name}],
+           children = [#xmlel{name = <<"value">>,
+                              children = [#xmlcdata{ content = Value }]}]}.
+
 maybe_simple_elem(#rsm_in{simple=true}) ->
-    [#xmlel{name = <<"simple">>}];
+    [field_el(<<"simple">>, <<"boolean">>, <<"true">>)];
 maybe_simple_elem(_) ->
     [].
 
 maybe_opt_count_elem(#rsm_in{opt_count=true}) ->
-    [#xmlel{name = <<"opt_count">>}];
+    [field_el(<<"opt_count">>, <<"boolean">>, <<"true">>)];
 maybe_opt_count_elem(_) ->
     [].
 
@@ -1603,10 +1716,12 @@ border_attributes(undefined) ->
     [];
 border_attributes(#rsm_in{
         before_id=BeforeId, after_id=AfterId, from_id=FromId, to_id=ToId}) ->
-    maybe_attr(<<"before_id">>, BeforeId)
-    ++ maybe_attr(<<"after_id">>, AfterId)
-    ++ maybe_attr(<<"from_id">>, FromId)
-    ++ maybe_attr(<<"to_id">>, ToId).
+    skip_undefined([
+     field_el(<<"before_id">>, <<"text-single">>, BeforeId),
+     field_el(<<"after_id">>, <<"text-single">>, AfterId),
+     field_el(<<"from_id">>, <<"text-single">>, FromId),
+     field_el(<<"to_id">>, <<"text-single">>, ToId)
+    ]).
 
 maybe_rsm_elem(undefined) ->
     undefined;
@@ -1646,6 +1761,12 @@ add_with_jid(BWithJID,
         Query=#xmlel{children=QueryChildren}]}) ->
     IQ#xmlel{children=[
         Query#xmlel{children=[maybe_with_elem(BWithJID) | QueryChildren]}]}.
+
+stanza_retrieve_form_fields() ->
+    escalus_stanza:iq(<<"get">>, [#xmlel{
+                                     name = <<"query">>,
+                                     attrs = mam_ns_attr(),
+                                     children =[]}]).
 
 %% ----------------------------------------------------------------------
 %% PREFERENCE QUERIES
@@ -1699,7 +1820,7 @@ parse_forwarded_message(#xmlel{name = <<"message">>,
 'parse_children[message/result]'(#xmlel{name = <<"forwarded">>,
                                         children = Children}, M) ->
     lists:foldl(fun 'parse_children[message/result/forwarded]'/2, M, Children).
-    
+
 
 'parse_children[message/result/forwarded]'(#xmlel{name = <<"delay">>,
                                                   attrs = Attrs}, M) ->
@@ -1739,13 +1860,12 @@ message_id(Num, Config) ->
 %%     []}]
 %%
 %%
-%%  [{xmlel,<<"iq">>,
+%%  [{xmlel,<<"message">>,
 %%       [{<<"from">>,<<"alice@localhost">>},
 %%        {<<"to">>,<<"alice@localhost/res1">>},
-%%        {<<"id">>,<<"c256a18c4b720465e215a81362d41eb7">>},
-%%        {<<"type">>,<<"result">>}],
-%%       [{xmlel,<<"query">>,
-%%            [{<<"xmlns">>,<<"urn:xmpp:mam:tmp">>}],
+%%        {<<"id">>,<<"c256a18c4b720465e215a81362d41eb7">>}],
+%%       [{xmlel,<<"fin">>,
+%%            [{<<"xmlns">>,<<"urn:xmpp:mam:0">>}],
 %%            [{xmlel,<<"set">>,
 %%                 [{<<"xmlns">>,<<"http://jabber.org/protocol/rsm">>}],
 %%                 [{xmlel,<<"first">>,
@@ -1753,42 +1873,47 @@ message_id(Num, Config) ->
 %%                      [{xmlcdata,<<"103439">>}]},
 %%                  {xmlel,<<"last">>,[],[{xmlcdata,<<"103447">>}]},
 %%                  {xmlel,<<"count">>,[],[{xmlcdata,<<"15">>}]}]}]}]}]
-parse_result_iq(#xmlel{name = <<"iq">>,
+parse_result_fin(#xmlel{name = <<"message">>,
                        attrs = Attrs, children = Children}) ->
-    IQ = #result_iq{
+    RFin = #result_fin{
         from = proplists:get_value(<<"from">>, Attrs),
         to   = proplists:get_value(<<"to">>, Attrs),
         id   = proplists:get_value(<<"id">>, Attrs)},
-    lists:foldl(fun 'parse_children[iq]'/2, IQ, Children).
+    lists:foldl(fun 'parse_children[iq]'/2, RFin, Children).
 
-'parse_children[iq]'(#xmlel{name = <<"query">>, children = Children},
-                     IQ) ->
-    lists:foldl(fun 'parse_children[iq/query]'/2, IQ, Children).
+'parse_children[iq]'(#xmlel{name = <<"fin">>,
+                            attrs = Attrs,  children = Children},
+                     RFin) ->
+    C  = case proplists:get_value(<<"complete">>, Attrs, <<"false">>) of
+             <<"false">> -> false;
+             <<"true">> -> true
+         end,
+    NRFin  = RFin#result_fin{complete = C},
+    lists:foldl(fun 'parse_children[iq/fin]'/2, NRFin, Children).
 
-
-'parse_children[iq/query]'(#xmlel{name = <<"set">>,
+'parse_children[iq/fin]'(#xmlel{name = <<"set">>,
                                   children = Children},
-                           IQ) ->
-    lists:foldl(fun 'parse_children[iq/query/set]'/2, IQ, Children).
+                           RFin) ->
+    lists:foldl(fun 'parse_children[iq/fin/set]'/2, RFin, Children).
 
-'parse_children[iq/query/set]'(#xmlel{name = <<"first">>,
+'parse_children[iq/fin/set]'(#xmlel{name = <<"first">>,
                                       attrs = Attrs,
                                       children = [{xmlcdata, First}]},
-                               IQ) ->
+                               RFin) ->
     Index = case proplists:get_value(<<"index">>, Attrs) of
                 undefined -> undefined;
                 X -> list_to_integer(binary_to_list(X))
             end,
-    IQ#result_iq{first_index = Index, first = First};
-'parse_children[iq/query/set]'(#xmlel{name = <<"last">>,
+    RFin#result_fin{first_index = Index, first = First};
+'parse_children[iq/fin/set]'(#xmlel{name = <<"last">>,
                                       children = [{xmlcdata, Last}]},
-                               IQ) ->
-    IQ#result_iq{last = Last};
-'parse_children[iq/query/set]'(#xmlel{name = <<"count">>,
+                               RFin) ->
+    RFin#result_fin{last = Last};
+'parse_children[iq/fin/set]'(#xmlel{name = <<"count">>,
                                       children = [{xmlcdata, Count}]},
-                               IQ) ->
-    IQ#result_iq{count = list_to_integer(binary_to_list(Count))};
-'parse_children[iq/query/set]'(_, IQ) -> IQ.
+                               RFin) ->
+    RFin#result_fin{count = list_to_integer(binary_to_list(Count))};
+'parse_children[iq/fin/set]'(_, RFin) -> RFin.
 
 is_def(X) -> X =/= undefined.
 
@@ -1827,7 +1952,7 @@ parse_jids(Els) ->
 %% </iq>
 parse_error_iq(#xmlel{name = <<"iq">>,
                       attrs = Attrs, children = Children}) ->
-    
+
     IQ = #error_iq{
         type = proplists:get_value(<<"type">>, Attrs),
         id   = proplists:get_value(<<"id">>, Attrs)},
@@ -1861,7 +1986,7 @@ generate_rpc_jid({_,User}) ->
      %JID = <<Username/binary, "@", Server/binary, "/rpc">>,
      %{jid, JID, Username, Server, <<"rpc">>}.
     {jid, Username, Server, <<"rpc">>, Username, Server, <<"rpc">>}.
-    
+
 start_alice_room(Config) ->
     %% TODO: ensure, that the room's archive is empty
     RoomName = <<"alicesroom">>,
@@ -1923,8 +2048,8 @@ send_muc_rsm_messages(Config) ->
         %% Get whole history.
         escalus:send(Alice,
             stanza_to_room(stanza_archive_request(<<"all_room_messages">>), Room)),
-        [_ArcIQ|AllMessages] =
-            assert_respond_size(15, wait_archive_respond_iq_first(Alice)),
+        [_ArcFin|AllMessages] =
+            assert_respond_size(15, wait_archive_respond_fin_first(Alice)),
         ParsedMessages = [parse_forwarded_message(M) || M <- AllMessages],
         Pid ! {parsed_messages, ParsedMessages},
         ok
@@ -1949,8 +2074,8 @@ send_rsm_messages(Config) ->
         escalus:wait_for_stanzas(Bob, 15, 5000),
         %% Get whole history.
         rsm_send(Config, Alice, stanza_archive_request(<<"all_messages">>)),
-        [_ArcIQ|AllMessages] =
-            assert_respond_size(15, wait_archive_respond_iq_first(Alice)),
+        [_ArcFin|AllMessages] =
+            assert_respond_size(15, wait_archive_respond_fin_first(Alice)),
         ParsedMessages = [parse_forwarded_message(M) || M <- AllMessages],
         Pid ! {parsed_messages, ParsedMessages},
         ok
@@ -2030,12 +2155,12 @@ wait_message_range(Client, FromN, ToN) ->
     wait_message_range(Client, 15, FromN-1, FromN, ToN).
 
 wait_message_range(Client, TotalCount, Offset, FromN, ToN) ->
-    [IQ|Messages] = wait_archive_respond_iq_first(Client),
+    [Fin|Messages] = wait_archive_respond_fin_first(Client),
     ParsedMessages = parse_messages(Messages),
-    ParsedIQ = parse_result_iq(IQ),
+    ParsedFin = parse_result_fin(Fin),
     try
-        ?assert_equal(TotalCount, ParsedIQ#result_iq.count),
-        ?assert_equal(Offset, ParsedIQ#result_iq.first_index),
+        ?assert_equal(TotalCount, ParsedFin#result_fin.count),
+        ?assert_equal(Offset, ParsedFin#result_fin.first_index),
         %% Compare body of the messages.
         ?assert_equal([generate_message_text(N) || N <- lists:seq(FromN, ToN)],
                       [B || #forwarded_message{message_body=B} <- ParsedMessages]),
@@ -2045,20 +2170,20 @@ wait_message_range(Client, TotalCount, Offset, FromN, ToN) ->
         ct:pal("IQ: ~p~n"
                "Messages: ~p~n"
                "Parsed messages: ~p~n",
-               [IQ, Messages, ParsedMessages]),
+               [ParsedFin, Messages, ParsedMessages]),
         erlang:raise(Class, Reason, Stacktrace)
     end.
 
 
 wait_empty_rset(Alice, TotalCount) ->
-    [IQ] = wait_archive_respond_iq_first(Alice),
-    ParsedIQ = parse_result_iq(IQ),
+    [Fin] = wait_archive_respond_fin_first(Alice),
+    ParsedFin = parse_result_fin(Fin),
     try
-        ?assert_equal(TotalCount, ParsedIQ#result_iq.count),
+        ?assert_equal(TotalCount, ParsedFin#result_fin.count),
         ok
     catch Class:Reason ->
         Stacktrace = erlang:get_stacktrace(),
-        ct:pal("IQ: ~p~n", [IQ]),
+        ct:pal("IQ: ~p~n", [Fin]),
         erlang:raise(Class, Reason, Stacktrace)
     end.
 
