@@ -669,13 +669,18 @@ just_stop_module(Host, Mod) ->
     ok.
 
 rpc_apply(M, F, Args) ->
-    case escalus_ejabberd:rpc(M, F, Args) of
+    case rpc_call(M, F, Args) of
     {badrpc, Reason} ->
         ct:fail("~p:~p/~p with arguments ~w fails with reason ~p.",
                 [M, F, length(Args), Args, Reason]);
     Result ->
         Result
     end.
+
+rpc_call(M, F, A) ->
+    Node = escalus_ct:get_config(ejabberd_node),
+    Cookie = escalus_ct:get_config(ejabberd_cookie),
+    escalus_ct:rpc_call(Node, M, F, A, 10000, Cookie).
 
 %%--------------------------------------------------------------------
 %% Group name helpers
@@ -955,7 +960,7 @@ purge_single_message(Config) ->
             #forwarded_message{result_id=MessId} = ParsedMess,
             escalus:send(Alice, stanza_purge_single_message(MessId)),
             %% Waiting for ack.
-            escalus:assert(is_iq_result, escalus:wait_for_stanza(Alice)),
+            escalus:assert(is_iq_result, escalus:wait_for_stanza(Alice, 5000)),
             escalus:send(Alice, stanza_archive_request(<<"q2">>)),
             assert_respond_size(0, wait_archive_respond_iq_first(Alice)),
             ok
@@ -973,7 +978,7 @@ purge_old_single_message(Config) ->
             #forwarded_message{result_id=MessId} = ParsedMess,
             escalus:send(Alice, stanza_purge_single_message(MessId)),
             %% Waiting for ack.
-            escalus:assert(is_iq_result, escalus:wait_for_stanza(Alice)),
+            escalus:assert(is_iq_result, escalus:wait_for_stanza(Alice, 5000)),
             %% Check, that it was deleted.
             escalus:send(Alice, stanza_archive_request(<<"q2">>)),
             assert_respond_size(11, wait_archive_respond_iq_first(Alice)),
@@ -995,7 +1000,7 @@ purge_multiple_messages(Config) ->
             escalus:send(Bob, stanza_purge_multiple_messages(
                     undefined, undefined, undefined)),
             %% Waiting for ack.
-            escalus:assert(is_iq_result, escalus:wait_for_stanza(Bob)),
+            escalus:assert(is_iq_result, escalus:wait_for_stanza(Bob, 5000)),
             escalus:send(Bob, stanza_archive_request(<<"q2">>)),
             assert_respond_size(0, wait_archive_respond_iq_first(Bob)),
             ok
