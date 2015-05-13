@@ -188,6 +188,8 @@ is_skipped(odbc_mnesia_muc_cache = C, muc_with_pm) ->
     is_configuration_skipped(C) orelse false;
 is_skipped(odbc_mnesia_muc_cache = C, muc_rsm)     ->
     is_configuration_skipped(C) orelse false;
+is_skipped(riak_timed_buckets, G) ->
+    lists:member(G, [muc, muc_with_pm, rsm, with_rsm, muc_rsm]);
 is_skipped(C, _) -> is_configuration_skipped(C).
 
 is_configuration_skipped(C) ->
@@ -908,7 +910,7 @@ offline_message(Config) ->
 
     %% He receives his initial presence and the message.
     escalus:wait_for_stanzas(Bob, 2, 1000),
-
+    
     %% Bob checks his archive.
     escalus:send(Bob, stanza_archive_request(<<"q1">>)),
     [_ArcRes | ArcMsgs] = R = wait_archive_respond_iq_first(Bob),
