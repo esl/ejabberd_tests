@@ -685,7 +685,7 @@ delete_delimiter("_" ++ Tail) ->
 %%--------------------------------------------------------------------
 
 %% Querying the archive for messages
-simple_archive_request(Config) ->
+simple_archive_request(ConfigIn) ->
     F = fun(Alice, Bob) ->
         %% Alice sends "OH, HAI!" to Bob
         %% {xmlel,<<"message">>,
@@ -699,6 +699,10 @@ simple_archive_request(Config) ->
         assert_respond_size(1, wait_archive_respond_iq_first(Alice)),
         ok
         end,
+    MongooseMetrics = [{[backends, mod_mam, archive], changed},
+                       {[backends, mod_mam, lookup], changed}
+                      ],
+    Config = [{mongoose_metrics, MongooseMetrics} | ConfigIn],
     escalus:story(Config, [1, 1], F).
 
 querying_for_all_messages_with_jid(Config) ->
