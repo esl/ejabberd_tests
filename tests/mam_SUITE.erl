@@ -141,8 +141,6 @@ configurations() ->
      odbc_cache,
      odbc_mnesia_cache,
      odbc_mnesia_muc_cache,
-     %riak_timed_buckets,
-     %riak_user_buckets,
      riak_timed_yz_buckets,
      ca].
 
@@ -190,10 +188,8 @@ is_skipped(odbc_mnesia_muc_cache = C, muc_with_pm) ->
     is_configuration_skipped(C) orelse false;
 is_skipped(odbc_mnesia_muc_cache = C, muc_rsm)     ->
     is_configuration_skipped(C) orelse false;
-is_skipped(riak_timed_buckets, G) ->
-    lists:member(G, [muc, muc_with_pm, rsm, with_rsm, muc_rsm]);
 is_skipped(riak_timed_yz_buckets, G) ->
-    lists:member(G, [muc, muc_with_pm, rsm, with_rsm, muc_rsm]);
+    lists:member(G, [muc, muc_with_pm, muc_rsm]);
 is_skipped(riak_user_buckets, G) ->
     lists:member(G, [muc, muc_with_pm, rsm, with_rsm, muc_rsm]);
 is_skipped(C, _) -> is_configuration_skipped(C).
@@ -1982,6 +1978,7 @@ send_rsm_messages(Config) ->
          || N <- lists:seq(1, 15)],
         %% Bob is waiting for 15 messages for 5 seconds.
         escalus:wait_for_stanzas(Bob, 15, 5000),
+        maybe_wait_for_yz(Config),
         %% Get whole history.
         rsm_send(Config, Alice, stanza_archive_request(<<"all_messages">>)),
         [_ArcIQ|AllMessages] =
@@ -2139,7 +2136,9 @@ generate_msgs_for_day(Day, OwnerJID, OtherUsers) ->
      || RemoteJID <- OtherUsers].
 
 generate_msg_for_date_user(Owner, {RemoteBin, _, _} = Remote, DateTime) ->
-    Microsec = datetime_to_microseconds(DateTime),
+    MicrosecDateTime = datetime_to_microseconds(DateTime),
+    NowMicro = rpc_apply(mod_mam_utils, now_to_microseconds, [rpc_apply(erlang, now, [])]),
+    Microsec = min(NowMicro, MicrosecDateTime),
     MsgIdOwner = rpc_apply(mod_mam_utils, encode_compact_uuid, [Microsec, random:uniform(20)]),
     MsgIdRemote = rpc_apply(mod_mam_utils, encode_compact_uuid, [Microsec+1, random:uniform(20)]),
     Packet = escalus_stanza:chat_to(RemoteBin, base16:encode(crypto:rand_bytes(4))),
