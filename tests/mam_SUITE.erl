@@ -141,7 +141,9 @@ configurations() ->
      odbc_cache,
      odbc_mnesia_cache,
      odbc_mnesia_muc_cache,
-     riak_timed_buckets,
+     %riak_timed_buckets,
+     %riak_user_buckets,
+     riak_timed_yz_buckets,
      ca].
 
 basic_group_names() ->
@@ -189,6 +191,10 @@ is_skipped(odbc_mnesia_muc_cache = C, muc_with_pm) ->
 is_skipped(odbc_mnesia_muc_cache = C, muc_rsm)     ->
     is_configuration_skipped(C) orelse false;
 is_skipped(riak_timed_buckets, G) ->
+    lists:member(G, [muc, muc_with_pm, rsm, with_rsm, muc_rsm]);
+is_skipped(riak_timed_yz_buckets, G) ->
+    lists:member(G, [muc, muc_with_pm, rsm, with_rsm, muc_rsm]);
+is_skipped(riak_user_buckets, G) ->
     lists:member(G, [muc, muc_with_pm, rsm, with_rsm, muc_rsm]);
 is_skipped(C, _) -> is_configuration_skipped(C).
 
@@ -294,9 +300,15 @@ create_users(Config) ->
 delete_users(Config) ->
     escalus:create_users(Config, {by_name, user_names()}).
 
-init_per_group(Group, Config) ->
+init_per_group(Group, ConfigIn) ->
     C = configuration(Group),
     B = basic_group(Group),
+    Config = case C of
+                 riak_timed_yz_buckets ->
+                     [{yz_wait, 2500} | ConfigIn];
+                 _ ->
+                     ConfigIn
+             end,
     ct:pal("Init per group ~p; configuration ~p; basic group ~p",
            [Group, C, B]),
     case init_modules(C, B, Config) of
@@ -460,6 +472,18 @@ init_modules(riak_timed_buckets, _, Config) ->
     init_module(host(), mod_mam_odbc_user, [pm]),
     init_module(host(), mod_mam, []),
     Config;
+init_modules(riak_timed_yz_buckets, _, Config) ->
+    init_module(host(), mod_mam_riak_timed_arch_yz, [pm]),
+    init_module(host(), mod_mam_odbc_prefs, [pm]),
+    init_module(host(), mod_mam_odbc_user, [pm]),
+    init_module(host(), mod_mam, []),
+    Config;
+init_modules(riak_user_buckets, _, Config) ->
+    init_module(host(), mod_mam_riak_bucket_arch, [pm]),
+    init_module(host(), mod_mam_odbc_prefs, [pm]),
+    init_module(host(), mod_mam_odbc_user, [pm]),
+    init_module(host(), mod_mam, []),
+    Config;
 init_modules(odbc_async_pool, _, Config) ->
     init_module(host(), mod_mam, []),
     init_module(host(), mod_mam_odbc_arch, [pm, no_writer]),
@@ -519,7 +543,9 @@ mam_modules() ->
      mod_mam_odbc_user,
      mod_mam_cache_user,
      mod_mam_muc_cache_user,
-     mod_mam_riak_timed_arch].
+     mod_mam_riak_timed_arch,
+     mod_mam_riak_timed_arch_yz,
+     mod_mam_riak_bucket_arch].
 
 init_state(_, muc_rsm, Config) ->
     Config1 = start_alice_room(Config),
@@ -697,6 +723,7 @@ simple_archive_request(ConfigIn) ->
         %%   {<<"type">>,<<"chat">>}],
         %%   [{xmlel,<<"body">>,[],[{xmlcdata,<<"OH, HAI!">>}]}]}
         escalus:send(Alice, escalus_stanza:chat_to(Bob, <<"OH, HAI!">>)),
+        maybe_wait_for_yz(ConfigIn),
         escalus:send(Alice, stanza_archive_request(<<"q1">>)),
         assert_respond_size(1, wait_archive_respond_iq_first(Alice)),
         ok
@@ -772,6 +799,7 @@ archived(Config) ->
         ?assert_equal(By, escalus_client:short_jid(Bob)),
 
         %% Bob calls archive.
+        maybe_wait_for_yz(Config),
         escalus:send(Bob, stanza_archive_request(<<"q1">>)),
         [_ArcIQ, ArcMsg] = assert_respond_size(1, wait_archive_respond_iq_first(Bob)),
         #forwarded_message{result_id=ArcId} = parse_forwarded_message(ArcMsg),
@@ -792,7 +820,7 @@ filter_forwarded(Config) ->
 
         %% Bob receives a message.
         escalus:wait_for_stanza(Bob),
-
+        maybe_wait_for_yz(Config),
         escalus:send(Bob, stanza_archive_request(<<"q1">>)),
         [_ArcIQ1, _ArcMsg1] = assert_respond_size(1, wait_archive_respond_iq_first(Bob)),
 
@@ -824,6 +852,7 @@ strip_archived(Config) ->
 
         try
         %% Bob calls archive.
+        maybe_wait_for_yz(Config),
         escalus:send(Bob, stanza_archive_request(<<"q1">>)),
         [_ArcIQ, ArcMsg] = assert_respond_size(1, wait_archive_respond_iq_first(Bob)),
         #forwarded_message{result_id=ArcId} = parse_forwarded_message(ArcMsg),
@@ -876,6 +905,7 @@ policy_violation(Config) ->
          || N <- lists:seq(1, 51)],
         %% Bob is waiting for 51 messages for 5 seconds.
         escalus:wait_for_stanzas(Bob, 51, 5000),
+        maybe_wait_for_yz(Config),
         %% Get whole history (queryid is "will_fail", id is random).
         escalus:send(Alice, stanza_archive_request(<<"will_fail">>)),
         ErrorIQ = escalus:wait_for_stanza(Alice, 5000),
@@ -898,6 +928,7 @@ offline_message(Config) ->
         %% Alice sends a message to Bob while bob is offline.
         escalus:send(Alice,
                      escalus_stanza:chat_to(bob, Msg)),
+        maybe_wait_for_yz(Config),
         ok
         end,
     escalus:story(Config, [1], F),
@@ -910,7 +941,7 @@ offline_message(Config) ->
 
     %% He receives his initial presence and the message.
     escalus:wait_for_stanzas(Bob, 2, 1000),
-    
+
     %% Bob checks his archive.
     escalus:send(Bob, stanza_archive_request(<<"q1">>)),
     [_ArcRes | ArcMsgs] = R = wait_archive_respond_iq_first(Bob),
@@ -923,6 +954,7 @@ offline_message(Config) ->
 purge_single_message(Config) ->
     F = fun(Alice, Bob) ->
             escalus:send(Alice, escalus_stanza:chat_to(Bob, <<"OH, HAI!">>)),
+            maybe_wait_for_yz(Config),
             escalus:send(Alice, stanza_archive_request(<<"q1">>)),
             [_IQ, Mess] = assert_respond_size(1, wait_archive_respond_iq_first(Alice)),
             ParsedMess = parse_forwarded_message(Mess),
@@ -965,13 +997,14 @@ purge_multiple_messages(Config) ->
                     escalus_stanza:chat_to(Bob, generate_message_text(N))),
                  timer:sleep(100)
              end || N <- lists:seq(1, 15)],
+            maybe_wait_for_yz(Config),
             %% Bob is waiting for 15 messages for 5 seconds.
             escalus:wait_for_stanzas(Bob, 15, 5000),
             %% Bob purges all messages from his archive.
             escalus:send(Bob, stanza_purge_multiple_messages(
                     undefined, undefined, undefined)),
             %% Waiting for ack.
-            escalus:assert(is_iq_result, escalus:wait_for_stanza(Bob, 5000)),
+            escalus:assert(is_iq_result, escalus:wait_for_stanza(Bob, 15000)),
             escalus:send(Bob, stanza_archive_request(<<"q2">>)),
             assert_respond_size(0, wait_archive_respond_iq_first(Bob)),
             ok
@@ -1977,7 +2010,7 @@ clean_archives(Config) ->
     %% It is not the best place to delete these messages.
     [ok = delete_offline_messages(S, U) || {S, U} <- SUs],
     [ok = delete_archive(S, U) || {S, U} <- SUs],
-    timer:sleep(500),
+    timer:sleep(1500),
     [assert_empty_archive(S, U) || {S, U} <- SUs],
     Config.
 
@@ -2073,6 +2106,7 @@ parse_messages(Messages) ->
     end.
 
 bootstrap_archive(Config) ->
+    random:seed(now()),
     Domain = escalus_ct:get_config(ejabberd_domain),
     ArcJID = {<<"alice@",Domain/binary>>, make_jid(<<"alice">> ,Domain, <<>>),
              rpc_apply(mod_mam, archive_id, [Domain, <<"alice">>])},
@@ -2082,7 +2116,7 @@ bootstrap_archive(Config) ->
                    rpc_apply(mod_mam, archive_id, [Domain, <<"carol">>])}],
     Msgs = generate_msgs_for_days(ArcJID, OtherUsers, 16),
     put_msgs(Msgs),
-
+    timer:sleep(1500),
     [{pre_generated_msgs, sort_msgs(Msgs)} | Config].
 
 sort_msgs(Msgs) ->
@@ -2208,3 +2242,10 @@ login_send_presence(Config, User) ->
     escalus:send(Client, escalus_stanza:presence(<<"available">>)),
     Client.
 
+maybe_wait_for_yz(Config) ->
+    case ?config(yz_wait, Config) of
+        undefined ->
+            ok;
+        Value ->
+            timer:sleep(Value)
+    end.
