@@ -311,7 +311,7 @@ init_per_group(Group, ConfigIn) ->
         skip ->
             {skip, {init_modules, C, B, Config}};
         Config1 ->
-            init_state(C, B, Config1)
+            [{basic_group, B}, {configuration, C} | init_state(C, B, Config1)]
     end.
     
 end_per_group(Group, Config) ->
@@ -470,8 +470,6 @@ init_modules(riak_timed_buckets, _, Config) ->
     Config;
 init_modules(riak_timed_yz_buckets, _, Config) ->
     init_module(host(), mod_mam_riak_timed_arch_yz, [pm]),
-    init_module(host(), mod_mam_odbc_prefs, [pm]),
-    init_module(host(), mod_mam_odbc_user, [pm]),
     init_module(host(), mod_mam, []),
     Config;
 init_modules(riak_user_buckets, _, Config) ->
@@ -597,8 +595,20 @@ init_per_testcase(C=muc_private_message, Config) ->
 init_per_testcase(C=range_archive_request_not_empty, Config) ->
     escalus:init_per_testcase(C,
         bootstrap_archive(clean_archives(Config)));
+init_per_testcase(C=prefs_set_request, Config) ->
+    skip_if_riak(C, Config);
+init_per_testcase(C=prefs_set_cdata_request, Config) ->
+    skip_if_riak(C, Config);
 init_per_testcase(CaseName, Config) ->
     escalus:init_per_testcase(CaseName, Config).
+
+skip_if_riak(C, Config) ->
+    case ?config(configuration, Config) of
+        riak_timed_yz_buckets ->
+            {skip, "prefs not implemented for riak"};
+        _ ->
+            escalus:init_per_testcase(C, Config)
+    end.
 
 end_per_testcase(C=muc_archive_request, Config) ->
     destroy_room(Config),
