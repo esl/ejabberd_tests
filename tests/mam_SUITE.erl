@@ -134,15 +134,24 @@ host() ->
     <<"localhost">>.
 
 configurations() ->
+    odbc_configs(is_odbc_enabled(host()))
+    ++ riak_configs(is_riak_enabled(host())).
+
+odbc_configs(true) ->
     [odbc,
      odbc_async_pool,
      odbc_mnesia,
      odbc_async_cache,
      odbc_cache,
      odbc_mnesia_cache,
-     odbc_mnesia_muc_cache,
-     riak_timed_yz_buckets,
-     ca].
+     odbc_mnesia_muc_cache];
+odbc_configs(_) ->
+    [].
+
+riak_configs(true) ->
+     [riak_timed_yz_buckets];
+riak_configs(_) ->
+     [].
 
 basic_group_names() ->
     [
@@ -182,23 +191,11 @@ groups() ->
      || C <- configurations(), {G, Props, Tests} <- basic_groups(),
         not is_skipped(C, G)].
 
-is_skipped(odbc_mnesia_muc_cache = C, muc)         ->
-    is_configuration_skipped(C) orelse false;
-is_skipped(odbc_mnesia_muc_cache = C, muc_with_pm) ->
-    is_configuration_skipped(C) orelse false;
-is_skipped(odbc_mnesia_muc_cache = C, muc_rsm)     ->
-    is_configuration_skipped(C) orelse false;
 is_skipped(riak_timed_yz_buckets, G) ->
     lists:member(G, [muc, muc_with_pm, muc_rsm]);
-is_skipped(riak_user_buckets, G) ->
-    lists:member(G, [muc, muc_with_pm, rsm, with_rsm, muc_rsm]);
-is_skipped(C, _) -> is_configuration_skipped(C).
+is_skipped(_, _) ->
+    false.
 
-is_configuration_skipped(C) ->
-    lists:member(C, skipped_configurations()).
-
-skipped_configurations() ->
-    ct:get_config({mam, skipped_configurations}, []).
 
 basic_groups() ->
     [{bootstrapped,     [], bootstrapped_cases()},
