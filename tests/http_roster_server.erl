@@ -14,10 +14,11 @@ add_roster(User, Roster) ->
 
 handle(<<"GET">>, [<<"roster">>, Jid], _Request) ->
     UserRoster = ets:lookup(?MY_DATABASE, Jid),
-    %% TODO return json for this usee
+    %% TODO return json for this user
     %% roster_to_json(UserRoster).
     roster_to_json(UserRoster).
 
+%% record_to_JSON/1
 roster_to_json(UserRoster) ->
     JsonUsers = lists:map(fun(Contact) ->
                                   {struct, [{jid, Contact}]}
@@ -37,7 +38,8 @@ ensure_table_running() ->
             spawn(fun() -> ets:new(?MY_DATABASE, [named_table, public]),
                            Parent ! initialized,
                            %% TODO run me in a looping child process
-                           timer:sleep(60*1000)
+                           %% timer:sleep(60*1000)
+			   loop()
                   end),
             receive initialized -> ok
             after 500 -> error(db_not_ready) end
@@ -50,3 +52,6 @@ table_exists() ->
         _ ->
             true
     end.
+
+loop() ->
+    loop().

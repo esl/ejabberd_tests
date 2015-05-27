@@ -86,11 +86,6 @@ user_fetches_roster(User) ->
     Result = escalus:wait_for_stanza(User),
     escalus_assert:is_roster_result(Result),
     get_roster_items(Result).
-    %% roster_to_list(Result).
-
-%% roster_to_list(Xml) ->
-%%     ?debugFmt("XML ~p~n", [Xml]),    
-%%     [].
 
 -spec get_roster_items(xmlterm()) -> [xmlterm()].
 get_roster_items(Stanza) ->
