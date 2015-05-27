@@ -18,6 +18,8 @@
 -compile(export_all).
 
 -include_lib("escalus/include/escalus.hrl").
+-include_lib("escalus/include/escalus_xmlns.hrl").
+-include_lib("exml/include/exml.hrl").
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -73,6 +75,7 @@ user_gets_roster_from_http_backend(Config) ->
               [] = Roster
       end).
 
+
 user_has_external_roster(User, Roster) ->
   
     UserJid = escalus_client:short_jid(User),
@@ -82,8 +85,15 @@ user_fetches_roster(User) ->
     escalus:send(User, escalus_stanza:roster_get()),
     Result = escalus:wait_for_stanza(User),
     escalus_assert:is_roster_result(Result),
-    roster_to_list(Result).
+    get_roster_items(Result).
+    %% roster_to_list(Result).
 
-roster_to_list(Xml) ->
-    ?debugFmt("XML ~p~n", [Xml]),
-    [].
+%% roster_to_list(Xml) ->
+%%     ?debugFmt("XML ~p~n", [Xml]),    
+%%     [].
+
+-spec get_roster_items(xmlterm()) -> [xmlterm()].
+get_roster_items(Stanza) ->
+    escalus:assert(is_iq_with_ns, [?NS_ROSTER], Stanza),
+    Query = exml_query:subelement(Stanza, <<"query">>),
+    Query#xmlel.children.
