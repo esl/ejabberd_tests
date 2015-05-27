@@ -12,6 +12,16 @@ cover_test_clean: get-deps
 	rm -rf tests/*.beam
 	make cover_test
 
+qt:
+	./rebar compile apps=ejabberd_tests
+	erl -noinput -sname test -setcookie ejabberd \
+		-pa `pwd`/tests \
+		    `pwd`/ebin \
+			`pwd`/deps/*/ebin \
+		$(ADD_OPTS) \
+		-s run_common_test main test=quick spec=$(TESTSPEC)
+
+
 quicktest: prepare
 	erl -noinput -sname test -setcookie ejabberd \
 		-pa `pwd`/tests \
