@@ -64,7 +64,7 @@ user_gets_roster_from_http_backend(Config) ->
       Config,
       [{alice, 1}],
       fun(Alice) ->
-              %% GIVEN:
+              %% GIVEN (above):
               %% user_exists(alice),
               %% user_logged_in(alice),
               http_roster_server:running(),
