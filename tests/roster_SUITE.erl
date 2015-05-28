@@ -31,8 +31,8 @@ all() ->
     [{group, essential}].
 
 groups() ->
-    [{essential, [user_gets_nonempty_roster_from_backend,
-		  user_gets_nonempty_roster_from_backend]}].
+    [{essential, [user_gets_empty_roster_from_backend,
+                  user_gets_nonempty_roster_from_backend]}].
 		  
 
 suite() ->
@@ -108,4 +108,25 @@ get_roster_items(Stanza) ->
 	      end, Items).
 
 rosters_equal(InputRoster, OutputRoster) ->
+    lists:foreach(fun ({Jid, InputContactProplist}) ->
+                          case proplists:get_value(Jid, OutputRoster) of
+                              undefined ->
+                                  error("Output roster does not contain user from the input");
+                              OutputContactProplist ->
+                                  compare_contacts(InputContactProplist, OutputContactProplist)
+                          end
+                  end,
+                  InputRoster),
     true.
+
+compare_contacts(InputContactProplist, OutputContactProplist) ->
+    lists:foreach(fun ({Field, FieldValue}) ->
+                          case proplists:get_value(Field, OutputContactProplist) of
+                              undefined ->
+                                  error("Field set in the contact is absent in the roster");
+                              FieldValue ->
+                                  ok;
+                              _ ->
+                                  error("Field has wrong value")
+                          end
+                  end, InputContactProplist).
