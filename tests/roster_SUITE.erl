@@ -28,9 +28,6 @@
 %%--------------------------------------------------------------------
 
 all() ->
-    dbg:tracer(),
-    dbg:p(all, [return_to, c]),
-    dbg:tpl(mongoose_helper, x),
     [{group, essential}].
 
 groups() ->
@@ -86,7 +83,6 @@ user_gets_roster_from_http_backend(Config, InputRoster) ->
               user_has_external_roster(Alice, InputRoster),
               %% When:
               OutputRoster = user_fetches_roster(Alice),
-%%	      ?debugFmt("OUTPUT ROSTER = ~p~n", [OutputRoster]),
               %% Then:
               rosters_equal(InputRoster, OutputRoster)
       end).
@@ -103,11 +99,9 @@ user_fetches_roster(User) ->
 
 -spec get_roster_items(xmlterm()) -> [xmlterm()].
 get_roster_items(Stanza) ->
-    ?debugFmt("STANZA ~p~n", [Stanza]),
     escalus:assert(is_iq_with_ns, [?NS_ROSTER], Stanza),
     Result = exml_query:subelement(Stanza, <<"query">>),
     Items = exml_query:paths(Result, [{element, <<"item">>}]),
-    ?debugFmt("ITEMS = ~p~n", [Items]),
     lists:map(fun ({xmlel, <<"item">>, PropList, []}) ->
 		      Jid = proplists:get_value(<<"jid">>, PropList),
 		      {Jid, PropList}
