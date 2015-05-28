@@ -18,11 +18,9 @@ retrieve_roster(User) ->
     Roster.
 
 handle(<<"GET">>, [<<"roster">>, Domain, User], _Request) ->
-    ?debugFmt("USER ~p ~n", [User]),
     JID = jid(User, Domain),
     Items = retrieve_roster(JID),
     Result = items_to_json_roster(Items),
-    ?debugFmt("FINAL RESULT ~p~n", [Result]),
     Result.
 
 items_to_json_roster(Items) ->
