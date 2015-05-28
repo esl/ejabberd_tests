@@ -1,6 +1,7 @@
 -module(http_roster_server).
 -export([running/0, handle/3, add_roster/2]).
 -define(MY_DATABASE, fake_roster_db).
+-include_lib("../../../apps/ejabberd/include/mod_roster.hr").
 
 running() ->
     application:ensure_all_started(axiom),
@@ -16,22 +17,40 @@ add_roster(User, Roster) ->
 handle(<<"GET">>, [<<"roster">>, Domain, User], _Request) ->
     JID = jid(User, Domain),
     %% io:format("User = ~p, Domain = ~p, JID = ~p~n", [User, Domain, JID]),
-    UserRoster = case ets:lookup(?MY_DATABASE, JID) of
-		     [{_UserJID,Contacts}] ->
-			 Contacts;
+    Items = case ets:lookup(?MY_DATABASE, {User, Domain, JID}) of
+		     Rows ->
+			 Rows;
 		     [] ->
 			 []
 		 end,
-    roster_to_json(UserRoster).
+    rows_to_json_roster(Items).
 
 %% record_to_JSON/1
-roster_to_json(UserRoster) ->
-    JsonUsers = lists:map(fun(Contact) ->
-				  {struct, [{jid, Contact}]}
-			  end,
-			  UserRoster),
-    JsonStruct = {struct, [{items, JsonUsers}]},
-    list_to_binary(mochijson3:encode(JsonStruct)).
+rows_to_json_roster(Items) ->    
+    ItemsStruct = lists:map(fun json_item_struct/1, Items),
+    %% TODO: version numbering
+    RosterStruct = json_roster_struct(<<"0">>, ItemsStruct),
+    list_to_binary(mochijson3:encode(RosterStruct)).
+
+
+json_item_struct(#record{jid = JID,
+			 name = Name,
+			 subscription = Sub,
+			 ask = Ask,
+			 group = Groups}) ->
+    {struct,
+     [{jid, JID},
+      {name, Name},
+      {subscription, Sub},
+      {ask, Ask},
+      {approved, none},
+      {group, Groups}]}.
+
+json_roster_struct(Ver, Items) ->
+    {struct,
+     [{version, Ver},
+      {items, Items}]}.
+
 
 clean_all_rosters() ->
     true = ets:delete_all_objects(?MY_DATABASE).
