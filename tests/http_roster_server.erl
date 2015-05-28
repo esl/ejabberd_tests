@@ -1,7 +1,6 @@
 -module(http_roster_server).
 -export([running/0, handle/3, add_roster/2]).
 -define(MY_DATABASE, fake_roster_db).
--include_lib("../../../apps/ejabberd/include/mod_roster.hr").
 
 running() ->
     application:ensure_all_started(axiom),
