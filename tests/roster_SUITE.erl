@@ -28,10 +28,15 @@
 %%--------------------------------------------------------------------
 
 all() ->
+    dbg:tracer(),
+    dbg:p(all, [return_to, c]),
+    dbg:tpl(mongoose_helper, x),
     [{group, essential}].
 
 groups() ->
-    [{essential, [user_gets_roster_from_http_backend]}].
+    [{essential, [user_gets_nonempty_roster_from_backend]}].
+		  %%user_gets_nonempty_roster_from_backend]}].
+		  
 
 suite() ->
     escalus:suite().
@@ -47,10 +52,10 @@ end_per_suite(Config) ->
     escalus:end_per_suite(Config).
 
 init_per_group(_GroupName, Config) ->
-    escalus:create_users(Config, {by_name, [alice, bob]}).
+    escalus:create_users(Config, {by_name, [alice]}).
 
 end_per_group(_GroupName, Config) ->
-    escalus:delete_users(Config, {by_name, [alice, bob]}).
+    escalus:delete_users(Config, {by_name, [alice]}).
 
 init_per_testcase(TestCaseName, Config) ->
     escalus:init_per_testcase(TestCaseName, Config).
@@ -58,8 +63,18 @@ init_per_testcase(TestCaseName, Config) ->
 end_per_testcase(TestCaseName, Config) ->
     escalus:end_per_testcase(TestCaseName, Config).
 
+user_gets_empty_roster_from_backend(Config) ->
+    user_gets_roster_from_http_backend(Config, []).
 
-user_gets_roster_from_http_backend(Config) ->
+user_gets_nonempty_roster_from_backend(Config) ->
+    BobJid = <<"bob@domain">>,
+    Bob = {BobJid, [{<<"jid">>, BobJid}]},
+    CarolJid = <<"carol@domain">>,
+    Carol = {CarolJid ,[{<<"jid">>, CarolJid}]},
+    Roster = [Bob, Carol],
+    user_gets_roster_from_http_backend(Config, Roster).
+
+user_gets_roster_from_http_backend(Config, InputRoster) ->
     escalus:story(
       Config,
       [{alice, 1}],
@@ -68,16 +83,15 @@ user_gets_roster_from_http_backend(Config) ->
               %% user_exists(alice),
               %% user_logged_in(alice),
               http_roster_server:running(),
-              user_has_external_roster(Alice, []),
+              user_has_external_roster(Alice, InputRoster),
               %% When:
-              Roster = user_fetches_roster(Alice),
+              OutputRoster = user_fetches_roster(Alice),
+%%	      ?debugFmt("OUTPUT ROSTER = ~p~n", [OutputRoster]),
               %% Then:
-              [] = Roster
+              rosters_equal(InputRoster, OutputRoster)
       end).
 
-
 user_has_external_roster(User, Roster) ->
-  
     UserJid = escalus_client:short_jid(User),
     http_roster_server:add_roster(UserJid, Roster).
 
@@ -89,6 +103,15 @@ user_fetches_roster(User) ->
 
 -spec get_roster_items(xmlterm()) -> [xmlterm()].
 get_roster_items(Stanza) ->
+    ?debugFmt("STANZA ~p~n", [Stanza]),
     escalus:assert(is_iq_with_ns, [?NS_ROSTER], Stanza),
-    Query = exml_query:subelement(Stanza, <<"query">>),
-    Query#xmlel.children.
+    Result = exml_query:subelement(Stanza, <<"query">>),
+    Items = exml_query:paths(Result, [{element, <<"item">>}]),
+    ?debugFmt("ITEMS = ~p~n", [Items]),
+    lists:map(fun ({xmlel, <<"item">>, PropList, []}) ->
+		      Jid = proplists:get_value(<<"jid">>, PropList),
+		      {Jid, PropList}
+	      end, Items).
+
+rosters_equal(InputRoster, OutputRoster) ->
+    true.

@@ -9,7 +9,7 @@
 %% http://www.erlang.org/doc/apps/common_test/run_test_chapter.html#test_specifications
 
 %% do not remove below SUITE if testing mongoose
-{suites, "tests", mongoose_sanity_checks_SUITE}.
+%% {suites, "tests", mongoose_sanity_checks_SUITE}.
 
 {suites, "tests", roster_SUITE}.
 
@@ -45,6 +45,6 @@
 %% {suites, "tests", websockets_SUITE}.
 {config, ["test.config"]}.
 {logdir, "ct_report"}.
-{ct_hooks, [ct_tty_hook, ct_mongoose_hook]}.
+%% {ct_hooks, [ct_tty_hook, ct_mongoose_hook]}.
 %%To enable printing group and case enters on server side
 %%{ct_hooks, [{ct_tty_hook, [print_group, print_case]}]}.
