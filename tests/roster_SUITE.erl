@@ -34,8 +34,8 @@ all() ->
     [{group, essential}].
 
 groups() ->
-    [{essential, [user_gets_nonempty_roster_from_backend]}].
-		  %%user_gets_nonempty_roster_from_backend]}].
+    [{essential, [user_gets_nonempty_roster_from_backend,
+		  user_gets_nonempty_roster_from_backend]}].
 		  
 
 suite() ->

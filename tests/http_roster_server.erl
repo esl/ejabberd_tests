@@ -1,7 +1,6 @@
 -module(http_roster_server).
 -export([running/0, handle/3, add_roster/2]).
 -define(MY_DATABASE, fake_roster_db).
--include_lib("../../../apps/ejabberd/include/mod_roster.hr").
 
 running() ->
     application:ensure_all_started(axiom),
@@ -19,11 +18,9 @@ retrieve_roster(User) ->
     Roster.
 
 handle(<<"GET">>, [<<"roster">>, Domain, User], _Request) ->
-    ?debugFmt("USER ~p ~n", [User]),
     JID = jid(User, Domain),
     Items = retrieve_roster(JID),
     Result = items_to_json_roster(Items),
-    ?debugFmt("FINAL RESULT ~p~n", [Result]),
     Result.
 
 items_to_json_roster(Items) ->
