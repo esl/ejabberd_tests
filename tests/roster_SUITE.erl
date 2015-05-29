@@ -31,8 +31,10 @@ all() ->
     [{group, essential}].
 
 groups() ->
-    [{essential, [user_gets_nonempty_roster_from_backend,
-		  user_gets_nonempty_roster_from_backend]}].
+    [{essential, [user_gets_empty_roster_from_backend,
+                  user_gets_nonempty_roster_from_backend,
+                  user_gets_roster_with_subscription_from_backend,
+                  user_gets_roster_with_wrong_subscription_from_backend]}].
 		  
 
 suite() ->
@@ -71,6 +73,23 @@ user_gets_nonempty_roster_from_backend(Config) ->
     Roster = [Bob, Carol],
     user_gets_roster_from_http_backend(Config, Roster).
 
+user_gets_roster_with_subscription_from_backend(Config) ->
+    BobJid = <<"bob@domain">>,
+    Bob = {BobJid, [{<<"jid">>, BobJid}, {<<"subscription">>, <<"from">>}]},
+    Roster = [Bob],
+    user_gets_roster_from_http_backend(Config, Roster).
+
+user_gets_roster_with_wrong_subscription_from_backend(Config) ->
+    BobJid = <<"bob@domain">>,
+    Bob = {BobJid, [{<<"jid">>, BobJid}, {<<"subscription">>, <<"asdf">>}]},
+    Roster = [Bob],
+    try user_gets_roster_from_http_backend(Config, Roster) of
+        _ ->
+            error("Subscription should be one of none | to | from | both")
+    catch
+        error:_Exception -> true
+    end.
+
 user_gets_roster_from_http_backend(Config, InputRoster) ->
     escalus:story(
       Config,
@@ -108,4 +127,25 @@ get_roster_items(Stanza) ->
 	      end, Items).
 
 rosters_equal(InputRoster, OutputRoster) ->
+    lists:foreach(fun ({Jid, InputContactProplist}) ->
+                          case proplists:get_value(Jid, OutputRoster) of
+                              undefined ->
+                                  error("Output roster does not contain user from the input");
+                              OutputContactProplist ->
+                                  compare_contacts(InputContactProplist, OutputContactProplist)
+                          end
+                  end,
+                  InputRoster),
     true.
+
+compare_contacts(InputContactProplist, OutputContactProplist) ->
+    lists:foreach(fun ({Field, FieldValue}) ->
+                          case proplists:get_value(Field, OutputContactProplist) of
+                              undefined ->
+                                  error("Field set in the contact is absent in the roster");
+                              FieldValue ->
+                                  ok;
+                              _ ->
+                                  error("Field has wrong value")
+                          end
+                  end, InputContactProplist).
