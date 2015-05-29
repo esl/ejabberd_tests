@@ -45,9 +45,16 @@ suite() ->
 %%--------------------------------------------------------------------
 
 init_per_suite(Config) ->
-    escalus:init_per_suite(Config).
+    Config1 = escalus:init_per_suite(Config),
+    Config2 = ejabberd_node_utils:init(Config1),
+    ejabberd_node_utils:backup_config_file(Config2),
+    ejabberd_node_utils:modify_config_file(http_backend_options(), Config2),
+    ejabberd_node_utils:restart_application(ejabberd),
+    Config2.
 
 end_per_suite(Config) ->
+    ejabberd_node_utils:restore_config_file(Config),
+    ejabberd_node_utils:restart_application(ejabberd),
     escalus:end_per_suite(Config).
 
 init_per_group(_GroupName, Config) ->
@@ -149,3 +156,6 @@ compare_contacts(InputContactProplist, OutputContactProplist) ->
                                   error("Field has wrong value")
                           end
                   end, InputContactProplist).
+
+http_backend_options() ->
+    [{mod_roster, "{mod_roster, [{backend, http}]},"}].
