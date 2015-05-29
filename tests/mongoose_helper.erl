@@ -45,17 +45,7 @@ total_vcard_items() ->
 
 -spec total_roster_items() -> integer() | false.
 total_roster_items() ->
-    Domain = escalus_ct:get_config(ejabberd_domain),
-    RosterMnesia = ?RPC(gen_mod, is_loaded, [Domain, mod_roster]),
-    RosterODBC = ?RPC(gen_mod, is_loaded, [Domain, mod_roster_odbc]),
-    case {RosterMnesia, RosterODBC} of
-        {true, _} ->
-            generic_count_backend(mod_roster_mnesia);
-        {_, true} ->
-            generic_count_backend(mod_roster_odbc);
-        _ ->
-            false
-    end.
+    ok.
 
 %% Need to clear last_activity after carol (connected over BOSH)
 %% It is possible that from time to time the unset_presence_hook,
