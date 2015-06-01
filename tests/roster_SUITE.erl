@@ -33,9 +33,8 @@ all() ->
 groups() ->
     [{essential, [user_gets_empty_roster_from_backend,
                   user_gets_nonempty_roster_from_backend,
-                  user_gets_roster_with_subscription_from_backend,
-                  user_gets_roster_with_wrong_subscription_from_backend]}].
-		  
+                  user_gets_roster_with_subscription_from_backend]}].
+%% user_gets_roster_with_wrong_subscription_from_backend
 
 suite() ->
     escalus:suite().
@@ -69,20 +68,26 @@ init_per_testcase(TestCaseName, Config) ->
 end_per_testcase(TestCaseName, Config) ->
     escalus:end_per_testcase(TestCaseName, Config).
 
+
+%% Test cases
+
 user_gets_empty_roster_from_backend(Config) ->
     user_gets_roster_from_http_backend(Config, []).
 
 user_gets_nonempty_roster_from_backend(Config) ->
     BobJid = <<"bob@domain">>,
     Bob = {BobJid, [{<<"jid">>, BobJid}]},
+
     CarolJid = <<"carol@domain">>,
     Carol = {CarolJid ,[{<<"jid">>, CarolJid}]},
+
     Roster = [Bob, Carol],
     user_gets_roster_from_http_backend(Config, Roster).
 
 user_gets_roster_with_subscription_from_backend(Config) ->
     BobJid = <<"bob@domain">>,
     Bob = {BobJid, [{<<"jid">>, BobJid}, {<<"subscription">>, <<"from">>}]},
+
     Roster = [Bob],
     user_gets_roster_from_http_backend(Config, Roster).
 
@@ -90,12 +95,16 @@ user_gets_roster_with_wrong_subscription_from_backend(Config) ->
     BobJid = <<"bob@domain">>,
     Bob = {BobJid, [{<<"jid">>, BobJid}, {<<"subscription">>, <<"asdf">>}]},
     Roster = [Bob],
-    try user_gets_roster_from_http_backend(Config, Roster) of
+    try user_gets_roster_from_http_backend(Config, Roster)
+    of
         _ ->
             error("Subscription should be one of none | to | from | both")
     catch
-        error:_Exception -> true
+	error:badarg -> true
     end.
+
+
+%% Auxilliary
 
 user_gets_roster_from_http_backend(Config, InputRoster) ->
     escalus:story(
@@ -137,6 +146,7 @@ rosters_equal(InputRoster, OutputRoster) ->
     lists:foreach(fun ({Jid, InputContactProplist}) ->
                           case proplists:get_value(Jid, OutputRoster) of
                               undefined ->
+				  ?debugFmt("in = ~p, and out = ~p.~n ", [InputRoster, OutputRoster]),
                                   error("Output roster does not contain user from the input");
                               OutputContactProplist ->
                                   compare_contacts(InputContactProplist, OutputContactProplist)

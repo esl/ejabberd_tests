@@ -11,11 +11,17 @@ running() ->
 
 %% add_row/2
 add_roster(User, Roster) ->
-    ets:insert(?MY_DATABASE, {escalus_utils:jid_to_lower(User), Roster}).
+    JID = escalus_utils:jid_to_lower(User),
+    ets:insert(?MY_DATABASE, {JID, Roster}).
 
 retrieve_roster(User) ->
-    [{User, Roster}] = ets:lookup(?MY_DATABASE, escalus_utils:jid_to_lower(User)),
-    Roster.
+    JID = escalus_utils:jid_to_lower(User),
+    case ets:lookup(?MY_DATABASE, JID) of
+	[{JID, Roster}] ->
+	    Roster;
+	[] ->
+	    []
+    end.
 
 handle(<<"GET">>, [<<"roster">>, Domain, User], _Request) ->
     JID = jid(User, Domain),
