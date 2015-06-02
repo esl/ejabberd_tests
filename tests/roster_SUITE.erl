@@ -57,6 +57,7 @@ end_per_suite(Config) ->
     escalus:end_per_suite(Config).
 
 init_per_group(_GroupName, Config) ->
+    %% GIVEN: register user alice
     escalus:create_users(Config, {by_name, [alice]}).
 
 end_per_group(_GroupName, Config) ->
@@ -107,20 +108,25 @@ user_gets_roster_with_wrong_subscription_from_backend(Config) ->
 %% Auxilliary
 
 user_gets_roster_from_http_backend(Config, InputRoster) ->
+    %% GIVEN: started
+    http_roster_server:running(),
+    Alice = escalus_users:get_userspec(Config, alice),
+
+    %% WHEN: user alice logs in... and automatically asks for subscriptions
     escalus:story(
       Config,
       [{alice, 1}],
       fun(Alice) ->
-              %% GIVEN (above):
-              %% user_exists(alice),
-              %% user_logged_in(alice),
-              http_roster_server:running(),
+	      %% GIVEN: 
               user_has_external_roster(Alice, InputRoster),
-              %% When:
+	      %% WHEN: SHOULD NOT BE NEEDED!
               OutputRoster = user_fetches_roster(Alice),
-              %% Then:
+              %% Then: Store in Config
               rosters_equal(InputRoster, OutputRoster)
       end).
+
+    %% THEN: rosters are the same (in Config)
+
 
 user_has_external_roster(User, Roster) ->
     UserJid = escalus_client:short_jid(User),
