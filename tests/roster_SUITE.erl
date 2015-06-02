@@ -23,6 +23,7 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
+
 %%--------------------------------------------------------------------
 %% Suite configuration
 %%--------------------------------------------------------------------
@@ -31,13 +32,21 @@ all() ->
     [{group, essential}].
 
 groups() ->
-    [{essential, [user_gets_empty_roster_from_backend,
+    [{essential, [user_asks_for_roster_after_log_in,
+
+		  user_asks_for_empty_roster,
+
+		  user_asks_for_trivial_nonempty_roster,
+		  user_asks_for_nontrivial_nonempty_roster,
+
+		  user_gets_empty_roster_from_backend,
                   user_gets_nonempty_roster_from_backend,
                   user_gets_roster_with_subscription_from_backend]}].
 %% user_gets_roster_with_wrong_subscription_from_backend
 
 suite() ->
     escalus:suite().
+
 
 %%--------------------------------------------------------------------
 %% Init & teardown
@@ -57,7 +66,7 @@ end_per_suite(Config) ->
     escalus:end_per_suite(Config).
 
 init_per_group(_GroupName, Config) ->
-    %% GIVEN: register user alice
+    %% GIVEN:
     escalus:create_users(Config, {by_name, [alice]}).
 
 end_per_group(_GroupName, Config) ->
@@ -70,7 +79,49 @@ end_per_testcase(TestCaseName, Config) ->
     escalus:end_per_testcase(TestCaseName, Config).
 
 
+%%--------------------------------------------------------------------
 %% Test cases
+%%--------------------------------------------------------------------
+
+user_asks_for_roster_after_log_in(Config) ->
+    %% GIVEN:
+    http_roster_server:running(),
+
+    %% WHEN:
+    escalus:story(
+      Config,
+      [{alice, 1}],
+      fun(_Alice) ->
+	      ok
+      end).
+
+    %% THEN: ???
+
+user_asks_for_empty_roster(Config) ->
+    user_gets_roster_from_http_backend(Config, []).
+
+user_asks_for_trivial_nonempty_roster(Config) ->
+    BobJid = <<"bob@domain">>,
+    Bob = {BobJid, [{<<"jid">>, BobJid}]},
+    CarolJid = <<"carol@domain">>,
+    Carol = {CarolJid ,[{<<"jid">>, CarolJid}]},
+    Roster = [Bob, Carol],
+    user_gets_roster_from_http_backend(Config, Roster).
+
+user_asks_for_nontrivial_nonempty_roster(Config) ->
+    BobJid = <<"bob@domain">>,
+    Bob = {BobJid, [{<<"jid">>, BobJid},
+		    {<<"name">>, <<"bob">>},
+		    {<<"subscription">>, <<"to">>},
+		    {<<"groups">>, [<<"wonderland">>,
+				    <<"mathematics">>]}]},
+    CarolJid = <<"carol@domain">>,
+    Carol = {CarolJid ,[{<<"jid">>, CarolJid},
+			{<<"name">>, <<"carol">>},
+			{<<"subscription">>, <<"from">>}]},
+    Roster = [Bob, Carol],
+    user_gets_roster_from_http_backend(Config, Roster).
+
 
 user_gets_empty_roster_from_backend(Config) ->
     user_gets_roster_from_http_backend(Config, []).
@@ -108,24 +159,20 @@ user_gets_roster_with_wrong_subscription_from_backend(Config) ->
 %% Auxilliary
 
 user_gets_roster_from_http_backend(Config, InputRoster) ->
-    %% GIVEN: started
+    %% GIVEN:
     http_roster_server:running(),
-    Alice = escalus_users:get_userspec(Config, alice),
 
-    %% WHEN: user alice logs in... and automatically asks for subscriptions
     escalus:story(
       Config,
       [{alice, 1}],
       fun(Alice) ->
 	      %% GIVEN: 
               user_has_external_roster(Alice, InputRoster),
-	      %% WHEN: SHOULD NOT BE NEEDED!
+	      %% WHEN:
               OutputRoster = user_fetches_roster(Alice),
-              %% Then: Store in Config
+              %% Then:
               rosters_equal(InputRoster, OutputRoster)
       end).
-
-    %% THEN: rosters are the same (in Config)
 
 
 user_has_external_roster(User, Roster) ->
@@ -138,21 +185,31 @@ user_fetches_roster(User) ->
     escalus_assert:is_roster_result(Result),
     get_roster_items(Result).
 
--spec get_roster_items(xmlterm()) -> [xmlterm()].
 get_roster_items(Stanza) ->
     escalus:assert(is_iq_with_ns, [?NS_ROSTER], Stanza),
     Result = exml_query:subelement(Stanza, <<"query">>),
     Items = exml_query:paths(Result, [{element, <<"item">>}]),
-    lists:map(fun ({xmlel, <<"item">>, PropList, []}) ->
-		      Jid = proplists:get_value(<<"jid">>, PropList),
-		      {Jid, PropList}
+    lists:map(fun ({xmlel, <<"item">>, Proplist, Children}) ->
+		      Jid = proplists:get_value(<<"jid">>, Proplist),
+		      case Children of
+			  [] ->
+			      {Jid, Proplist};
+			  _ ->
+			      Groups = extract_roster_groups(Children),
+			      {Jid, [{<<"groups">>, Groups}|Proplist]}
+		      end
 	      end, Items).
+
+roster_group({xmlel,<<"group">>,[],[{xmlcdata,Group}]}) ->
+    Group.
+
+extract_roster_groups(List) ->
+    lists:map(fun roster_group/1, List).
 
 rosters_equal(InputRoster, OutputRoster) ->
     lists:foreach(fun ({Jid, InputContactProplist}) ->
                           case proplists:get_value(Jid, OutputRoster) of
                               undefined ->
-				  ?debugFmt("in = ~p, and out = ~p.~n ", [InputRoster, OutputRoster]),
                                   error("Output roster does not contain user from the input");
                               OutputContactProplist ->
                                   compare_contacts(InputContactProplist, OutputContactProplist)
