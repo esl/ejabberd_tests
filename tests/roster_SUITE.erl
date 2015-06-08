@@ -40,6 +40,7 @@ groups() ->
 	    ,user_asks_for_empty_roster
 	    ,user_asks_for_trivial_nonempty_roster
 	    ,user_asks_for_nontrivial_nonempty_roster
+	    ,user_asks_for_contact_pending_out
 	    ]},
      {write, [
 	      user_adds_trivial_contact_to_empty_roster
@@ -123,6 +124,18 @@ user_asks_for_nontrivial_nonempty_roster(Config) ->
 			{<<"subscription">>, <<"from">>}]},
     Roster = [Bob, Carol],
     user_gets_roster_from_http_backend(Config, Roster).
+
+user_asks_for_contact_pending_out(Config) ->
+    BobJid = <<"bob@domain">>,
+    Bob = {BobJid,
+	 [{<<"jid">>, BobJid},
+	  {<<"name">>, <<"Bob">>},
+	  {<<"subscription">>, <<"to">>},
+	  {<<"ask">>, <<"subscribe">>},
+	  {<<"groups">>,
+	   [<<"Wonderland">>,
+	    <<"Cryptography">>]}]},
+    user_gets_roster_from_http_backend(Config, [Bob]).
 
 user_adds_trivial_contact_to_empty_roster(Config) -> 
     %% GIVEN:
