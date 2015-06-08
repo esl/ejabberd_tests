@@ -31,16 +31,19 @@
 all() ->
     [
      {group, read}
-    ,{group, write}
+%    ,{group, write}
     ].
 
 groups() ->
-    [
-     {read, [user_asks_for_roster_after_log_in,
-	     user_asks_for_empty_roster,
-	     user_asks_for_trivial_nonempty_roster,
-	     user_asks_for_nontrivial_nonempty_roster]},
-     {write, [user_adds_trivial_contact_to_empty_roster]}
+    [{read, [
+	     user_asks_for_roster_after_log_in
+	    ,user_asks_for_empty_roster
+	    ,user_asks_for_trivial_nonempty_roster
+	    ,user_asks_for_nontrivial_nonempty_roster
+	    ]},
+     {write, [
+	      user_adds_trivial_contact_to_empty_roster
+	     ]}
     ].
 
 suite() ->
