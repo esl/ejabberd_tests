@@ -9,7 +9,6 @@ running() ->
     clean_all_rosters(),
     ok.
 
-%% add_row/2
 add_roster(User, Roster) ->
     JID = escalus_utils:jid_to_lower(User),
     ets:insert(?MY_DATABASE, {JID, Roster}).
@@ -27,7 +26,14 @@ handle(<<"GET">>, [<<"roster">>, Domain, User], _Request) ->
     JID = jid(User, Domain),
     Items = retrieve_roster(JID),
     Result = items_to_json_roster(Items),
-    Result.
+    Result;
+handle(<<"PUT">>, [<<"roster">>, Domain, User, <<"contact">>], Request0) ->
+    true = cowboy_req:has_body(Request0),
+    {ok, Body, _Request1} = cowboy_req:body(Request0),
+    JID = jid(User, Domain),
+    Contact = from_json_to_contact_proplist(Body),
+    ets:insert(?MY_DATABASE, {JID, Contact}),
+    Body.
 
 items_to_json_roster(Items) ->
     JsonStructItems = lists:map(fun json_item_struct/1, Items),
@@ -38,6 +44,11 @@ items_to_json_roster(Items) ->
 json_item_struct({_Jid, Proplist}) ->
     {struct,
      Proplist}.
+
+from_json_to_contact_proplist(JSON) ->
+    Struct = mochijson3:decode(JSON),
+    {struct, [{<<"item">>, Proplist}]} = Struct,
+    Proplist.
 
 json_roster_struct(Ver, JsonStructItems) ->
     {struct,

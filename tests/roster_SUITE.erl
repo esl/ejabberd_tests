@@ -31,7 +31,7 @@
 all() ->
     [
      {group, read}
-%    ,{group, write}
+    ,{group, write}
     ].
 
 groups() ->
