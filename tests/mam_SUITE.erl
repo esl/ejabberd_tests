@@ -1203,16 +1203,22 @@ range_archive_request_not_empty(Config) ->
         %%       </x>
         %%   </query>
         %% </iq>
+
         escalus:send(Alice, stanza_date_range_archive_request_not_empty()),
-        %% Receive two messages and IQ
-        M1 = escalus:wait_for_stanza(Alice, 5000),
-        M2 = escalus:wait_for_stanza(Alice, 5000),
+
         IQ = escalus:wait_for_stanza(Alice, 5000),
         escalus:assert(is_iq_result, IQ),
+
+        M1 = escalus:wait_for_stanza(Alice, 5000),
+        M2 = escalus:wait_for_stanza(Alice, 5000),
         #forwarded_message{delay_stamp=Stamp1} = parse_forwarded_message(M1),
         #forwarded_message{delay_stamp=Stamp2} = parse_forwarded_message(M2),
         ?assert_equal(<<"2000-07-21T01:50:15Z">>, Stamp1),
         ?assert_equal(<<"2000-07-21T01:50:16Z">>, Stamp2),
+
+        Fin = escalus:wait_for_stanza(Alice, 5000),
+        escalus:assert(is_mam_fin_message, Fin),
+
         ok
         end,
     escalus:story(Config, [1], F).
