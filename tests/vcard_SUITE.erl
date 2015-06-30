@@ -92,26 +92,25 @@ suite() ->
 
 init_per_suite(Config) ->
     NewConfig = escalus:init_per_suite(Config),
-    NewConfig1 = dynamic_modules:stop_running(mod_vcard, NewConfig),
-    [{ModVcard, _}] = ?config(running, NewConfig1),
-    escalus:create_users([{mod_vcard, ModVcard} | NewConfig1]).
+    NewConfig1 = stop_running_vcard_mod(NewConfig),
+    escalus:create_users(NewConfig1, {by_name, [alice, bob]}).
 
 end_per_suite(Config) ->
-    dynamic_modules:start_running(Config),
+    start_running_vcard_mod(Config),
     NewConfig = escalus:delete_users(Config, {by_name, [alice, bob]}),
     escalus:end_per_suite(NewConfig).
 
 init_per_group(rw, Config) ->
-    restart_mod(?config(mod_vcard, Config), rw),
+    ct:print("groupd rw"),
+    restart_vcard_mod(Config, rw),
     Config;
 init_per_group(GroupName, Config) ->
-    restart_mod(?config(mod_vcard, Config), GroupName),
+    ct:print("groupd ~p", [GroupName]),
+    restart_vcard_mod(Config, GroupName),
     prepare_vcards(Config).
 
 end_per_group(_, Config) ->
-    Domain = escalus_config:get_ct(
-            {vcard, data, all_search, server_jid}),
-    dynamic_modules:stop(Domain, ?config(mod_vcard, Config)),
+    stop_vcard_mod(Config),
     Config.
 
 init_per_testcase(CaseName, Config) ->
@@ -149,7 +148,7 @@ retrieve_own_card(Config) ->
       fun(Client) ->
               Res = escalus:send_and_wait(Client,
                         escalus_stanza:vcard_request()),
-              JID = escalus_client:short_jid(Client),
+              JID = escalus_utils:jid_to_lower(escalus_client:short_jid(Client)),
               ClientVCardTups =
                   escalus_config:get_ct(
                     {vcard, data, all_search, expected_vcards, JID}),
@@ -177,7 +176,7 @@ update_other_card(Config) ->
     escalus:story(
       Config, [{alice, 1}, {bob, 1}],
       fun(Client, OtherClient) ->
-              JID = escalus_client:short_jid(Client),
+              JID = escalus_utils:jid_to_lower(escalus_client:short_jid(Client)),
               Fields = [{<<"FN">>, <<"New name">>}],
               Res = escalus:send_and_wait(OtherClient,
                         escalus_stanza:vcard_update(JID, Fields)),
@@ -198,7 +197,7 @@ retrieve_others_card(Config) ->
     escalus:story(
       Config, [{alice, 1}, {bob, 1}],
       fun(Client, OtherClient) ->
-              OtherJID = escalus_client:short_jid(OtherClient),
+              OtherJID = escalus_utils:jid_to_lower(escalus_client:short_jid(OtherClient)),
               Res = escalus:send_and_wait(Client,
                         escalus_stanza:vcard_request(OtherJID)),
               OtherClientVCardTups = escalus_config:get_ct(
@@ -290,6 +289,7 @@ search_open(Config) ->
     escalus:story(
       Config, [{alice, 1}],
       fun(Client) ->
+                ct:print("waiting"),
               DirJID = escalus_config:get_ct(
                          {vcard, data, all_search, directory_jid}),
               Fields = [#xmlel{ name = <<"field">> }],
@@ -512,42 +512,62 @@ get_jid_record(JID) ->
 vcard_rpc(JID, Stanza) ->
     escalus_ejabberd:rpc(ejabberd_sm, route, [JID, JID, Stanza]).
 
-restart_mod(Module, rw) ->
-    restart_mod(Module, params_all(), Module);
-restart_mod(Module, ro_full) ->
-    restart_mod(Module, params_all(), Module);
-restart_mod(Module, ro_limited) ->
-    restart_mod(Module, params_limited(), Module);
-restart_mod(Module, ro_no) ->
-    restart_mod(Module, params_no(), Module).
+restart_vcard_mod(Config, rw) ->
+    restart_mod(params_all(Config));
+restart_vcard_mod(Config, ro_full) ->
+    restart_mod(params_all(Config));
+restart_vcard_mod(Config, ro_limited) ->
+    restart_mod(params_limited(Config));
+restart_vcard_mod(Config, ro_no) ->
+    restart_mod(params_no(Config)).
 
-params_all() ->
-    [{allow_return_all, true},
-     {search_all_hosts, true}].
+start_running_vcard_mod(Config) ->
+    Domain = escalus_config:get_config(ejabberd_domain, Config),
+    OriginalVcardConfig = ?config(mod_vcard, Config),
+    dynamic_modules:start(Domain, mod_vcard, OriginalVcardConfig).
+stop_running_vcard_mod(Config) ->
+    Domain = escalus_config:get_config(ejabberd_domain, Config),
+    CurrentConfigs = escalus_ejabberd:rpc(gen_mod, loaded_modules_with_opts, [Domain]),
+    {mod_vcard, CurrentVcardConfig} = lists:keyfind(mod_vcard, 1, CurrentConfigs),
+    dynamic_modules:stop(Domain, mod_vcard),
+    [{mod_vcard, CurrentVcardConfig} | Config].
 
-params_limited() ->
-    [{matches, 1},
-     {search_all_hosts, false},
-     {allow_return_all, false},
-     {host, "directory.@HOST@"}].
+stop_vcard_mod(Config) ->
+    Domain = escalus_config:get_config(ejabberd_domain, Config),
+    dynamic_modules:stop(Domain, mod_vcard).
 
-params_no() ->
-    [{search, false}].
+params_all(Config) ->
+    add_backend_param([{allow_return_all, true},
+                       {search_all_hosts, true}], ?config(mod_vcard, Config)).
 
-restart_mod(Mod, Params, undefined) ->
-    Domain = escalus_config:get_ct(
-            {vcard, data, all_search, server_jid}),
-    dynamic_modules:stop(Domain, Mod),
-    dynamic_modules:start(Domain, Mod, Params);
-restart_mod(Mod, Params, NewMod) ->
+params_limited(Config) ->
+    add_backend_param([{matches, 1},
+                       {search_all_hosts, false},
+                       {allow_return_all, false},
+                       {host, "directory.@HOST@"}], ?config(mod_vcard, Config)).
+
+params_no(Config) ->
+    add_backend_param([{search, false}], ?config(mod_vcard, Config)).
+
+
+add_backend_param(Opts, CurrentVCardConfig) ->
+    case lists:keyfind(backend, 1, CurrentVCardConfig) of
+        {backend, _} = BackendItem ->
+            [BackendItem | Opts];
+        _ ->
+            Opts
+    end.
+
+restart_mod(Params) ->
+    ct:print("mod_vcard params ~p", [Params]),
     Domain = escalus_config:get_ct(
             {vcard, data, all_search, server_jid}),
     SecDomain = escalus_config:get_ct(
             {vcard, data, all_search, secondary_server_jid}),
-    dynamic_modules:stop(Domain, Mod),
-    dynamic_modules:stop(SecDomain, Mod),
-    dynamic_modules:start(Domain, NewMod, Params),
-    dynamic_modules:start(SecDomain, NewMod, Params).
+    dynamic_modules:stop(Domain, mod_vcard),
+    dynamic_modules:stop(SecDomain, mod_vcard),
+    {ok, _Pid} = dynamic_modules:start(Domain, mod_vcard, Params),
+    {ok, _Pid2} = dynamic_modules:start(SecDomain, mod_vcard, Params).
 
 %%----------------------
 %% xmlel shortcuts
