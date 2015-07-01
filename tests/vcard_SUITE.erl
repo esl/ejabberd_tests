@@ -303,7 +303,7 @@ search_open(Config) ->
               ExpectedItemTups =
                   escalus_config:get_ct(
                     {vcard, data, all_search, search_results, open}),
-              list_unordered_key_match(1, ExpectedItemTups, ItemTups)
+              list_unordered_key_match(ExpectedItemTups, ItemTups)
       end).
 
 search_empty(Config) ->
@@ -339,7 +339,7 @@ search_some(Config) ->
               ExpectedItemTups =
                   escalus_config:get_ct(
                     {vcard, data, all_search, search_results, some}),
-              list_unordered_key_match(1, ExpectedItemTups, ItemTups)
+              list_unordered_key_match(ExpectedItemTups, ItemTups)
       end).
 
 search_wildcard(Config) ->
@@ -357,7 +357,7 @@ search_wildcard(Config) ->
                 ExpectedItemTups =
                                    escalus_config:get_ct(
                         {vcard, data, all_search, search_results, wildcard}),
-                list_unordered_key_match(1, ExpectedItemTups, ItemTups)
+                list_unordered_key_match(ExpectedItemTups, ItemTups)
         end).
 
 
@@ -482,10 +482,11 @@ prepare_vcards(Config) ->
                         ok;
                     _ ->
                         RJID = get_jid_record(JID),
-                        ok = vcard_rpc(RJID,
-                                   escalus_stanza:vcard_update(JID, Fields))
+                        VCard = escalus_stanza:vcard_update(JID, Fields),
+                        ok = vcard_rpc(RJID,VCard)
                 end
         end, AllVCards),
+    timer:sleep(timer:seconds(3)), %give some time to Yokozuna to index vcards
     Config.
 
 delete_vcards(Config) ->
@@ -667,26 +668,41 @@ check_xml_element([{ExpdFieldName, ExpdCData}|Rest], ElUnderTest) ->
 %% while the order of the elements does not matter.
 %% Returning means success. Crashing via ct:fail means failure.
 %% Prints the lists in the ct:fail Result term.
-list_unordered_key_match(Keypos, Expected, Actual) ->
+list_unordered_key_match(Expected, Actual) ->
     case length(Actual) of
         ActualLength when ActualLength == length(Expected) ->
-            list_unordered_key_match2(Keypos, Expected, Actual);
+            list_unordered_key_match2(Expected, Actual);
         ActualLength ->
             ct:fail("Expected size ~p, actual size ~p~nExpected: ~p~nActual: ~p",
                     [length(Expected), ActualLength, Expected, Actual])
     end.
 
-list_unordered_key_match2(_, [], _) ->
+list_unordered_key_match2([], _) ->
     ok;
-list_unordered_key_match2(Keypos, [ExpctdTup|Rest], ActualTuples) ->
-    Key = element(Keypos, ExpctdTup),
-    ActualTup = lists:keyfind(Key, Keypos, ActualTuples),
-    case ActualTup of
-        ExpctdTup ->
-            list_unordered_key_match2(Keypos, Rest, ActualTuples);
+list_unordered_key_match2([{User, ExpectedTup} | Rest], ActualTuples) ->
+
+    case lists:keyfind(User, 1, ActualTuples) of
+        {User, ReceivedTuple} ->
+            verify_tuples(ReceivedTuple, ExpectedTup);
         _ ->
-            ct:fail("~nExpected ~p~nGot ~p", [ExpctdTup, ActualTup])
+            ct:fail("can't find user ~p in received results: ~p",
+                    [User, ActualTuples])
+
     end.
+
+verify_tuples(Received, Expected) ->
+    ct:print("received:~n~p~nExpected:~n~p", [Received, Expected]),
+
+    Fun = fun(ExpectedItem) ->
+        case lists:member(ExpectedItem, Received) of
+            true ->
+                true;
+            _ ->
+                ct:fail("can't find item ~p in received items:~p", [ExpectedItem, Received])
+        end
+    end,
+    lists:all(Fun, Expected).
+
 
 search_result_item_tuples(Stanza) ->
     Result = ?EL(Stanza, <<"query">>),
