@@ -300,9 +300,7 @@ search_open(Config) ->
               %% Basically test that the right values exist
               %% and map to the right column headings
               ItemTups = search_result_item_tuples(Res),
-              ExpectedItemTups =
-                  escalus_config:get_ct(
-                    {vcard, data, all_search, search_results, open}),
+              ExpectedItemTups = [],
               list_unordered_key_match(ExpectedItemTups, ItemTups)
       end).
 
@@ -538,13 +536,10 @@ stop_vcard_mod(Config) ->
     dynamic_modules:stop(Domain, mod_vcard).
 
 params_all(Config) ->
-    add_backend_param([{allow_return_all, true},
-                       {search_all_hosts, true}], ?config(mod_vcard, Config)).
+    add_backend_param([], ?config(mod_vcard, Config)).
 
 params_limited(Config) ->
     add_backend_param([{matches, 1},
-                       {search_all_hosts, false},
-                       {allow_return_all, false},
                        {host, "directory.@HOST@"}], ?config(mod_vcard, Config)).
 
 params_no(Config) ->
