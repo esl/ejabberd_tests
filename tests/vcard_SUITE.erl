@@ -101,11 +101,9 @@ end_per_suite(Config) ->
     escalus:end_per_suite(NewConfig).
 
 init_per_group(rw, Config) ->
-    ct:print("groupd rw"),
     restart_vcard_mod(Config, rw),
     Config;
 init_per_group(GroupName, Config) ->
-    ct:print("groupd ~p", [GroupName]),
     restart_vcard_mod(Config, GroupName),
     prepare_vcards(Config).
 
@@ -289,7 +287,6 @@ search_open(Config) ->
     escalus:story(
       Config, [{alice, 1}],
       fun(Client) ->
-                ct:print("waiting"),
               DirJID = escalus_config:get_ct(
                          {vcard, data, all_search, directory_jid}),
               Fields = [#xmlel{ name = <<"field">> }],
@@ -345,7 +342,7 @@ search_wildcard(Config) ->
         Config, [{bob, 1}],
         fun(Client) ->
                 DirJID = escalus_config:get_ct(
-                        {vcard, data, all_search, directory_jid}),
+                        {vcard, data, sec_domain_search, directory_jid}),
                 Fields = [{<<"fn">>, <<"doe*">>}],
                 Res = escalus:send_and_wait(Client,
                         escalus_stanza:search_iq(DirJID,
@@ -382,8 +379,7 @@ search_some_limited(Config) ->
     escalus:story(
       Config, [{alice, 1}],
       fun(Client) ->
-              DirJID = escalus_config:get_ct(
-                         {vcard, data, ltd_search, directory_jid}),
+              DirJID = <<"directory.localhost.bis">>,
               Server = escalus_client:server(Client),
               Fields = [{<<"last">>, <<"Doe">>}],
               Res = escalus:send_and_wait(Client,
@@ -555,7 +551,6 @@ add_backend_param(Opts, CurrentVCardConfig) ->
     end.
 
 restart_mod(Params) ->
-    ct:print("mod_vcard params ~p", [Params]),
     Domain = escalus_config:get_ct(
             {vcard, data, all_search, server_jid}),
     SecDomain = escalus_config:get_ct(
@@ -686,8 +681,6 @@ list_unordered_key_match2([{User, ExpectedTup} | Rest], ActualTuples) ->
     end.
 
 verify_tuples(Received, Expected) ->
-    ct:print("received:~n~p~nExpected:~n~p", [Received, Expected]),
-
     Fun = fun(ExpectedItem) ->
         case lists:member(ExpectedItem, Received) of
             true ->
