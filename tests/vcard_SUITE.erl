@@ -123,6 +123,14 @@ end_per_testcase(CaseName, Config) ->
 %%--------------------------------------------------------------------
 
 update_own_card(Config) ->
+    case vcard_simple_SUITE:is_vcard_ldap() of
+        true ->
+            {skip, ldap_vcard_is_readonly};
+        _ ->
+            do_update_own_card(Config)
+    end.
+
+do_update_own_card(Config) ->
     escalus:story(
         Config, [{alice, 1}],
         fun(Client1) ->
@@ -543,14 +551,14 @@ params_no(Config) ->
 
 
 add_backend_param(Opts, CurrentVCardConfig) ->
-    case lists:keyfind(backend, 1, CurrentVCardConfig) of
-        {backend, _} = BackendItem ->
-            [BackendItem | Opts];
-        _ ->
-            Opts
-    end.
+    F = fun({Key, _} = Item, Cfg) ->
+        lists:keystore(Key, 1, Cfg, Item)
+    end,
+    lists:foldl(F, CurrentVCardConfig, Opts).
+
 
 restart_mod(Params) ->
+    ct:print("restarting with params ~p", [Params]),
     Domain = escalus_config:get_ct(
             {vcard, data, all_search, server_jid}),
     SecDomain = escalus_config:get_ct(
