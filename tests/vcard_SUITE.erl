@@ -93,11 +93,21 @@ suite() ->
 init_per_suite(Config) ->
     NewConfig = escalus:init_per_suite(Config),
     NewConfig1 = stop_running_vcard_mod(NewConfig),
-    escalus:create_users(NewConfig1, {by_name, [alice, bob]}).
+    AliceAndBob = escalus_users:get_users({by_name, [alice, bob]}),
+    BisUsers = [{aliceb,[{username,<<"aliceb">>},
+                        {server,<<"localhost.bis">>},
+                        {host, <<"localhost">>},
+                        {password,<<"makota">>}]},
+                {bobb,[{username,<<"bobb">>},
+                      {server,<<"localhost.bis">>},
+                      {host, <<"localhost">>},
+                      {password,<<"makrolika">>}]}],
+    NewUsers = AliceAndBob ++ BisUsers,
+    escalus:create_users([{escalus_users, NewUsers} | NewConfig1], NewUsers).
 
 end_per_suite(Config) ->
     start_running_vcard_mod(Config),
-    NewConfig = escalus:delete_users(Config, {by_name, [alice, bob]}),
+    NewConfig = escalus:delete_users(Config, config),
     escalus:end_per_suite(NewConfig).
 
 init_per_group(rw, Config) ->
@@ -174,8 +184,16 @@ user_doesnt_exist(Config) ->
                          {vcard, data, all_search, nonexistent_jid}),
               Res = escalus:send_and_wait(Client,
                         escalus_stanza:vcard_request(BadJID)),
-              escalus:assert(is_error, [<<"cancel">>,
-                                        <<"service-unavailable">>], Res)
+          case
+          escalus_pred:is_error(<<"cancel">>,
+              <<"service-unavailable">>,
+              Res) of
+              true ->
+                  ok;
+              _ ->
+                  [] = Res#xmlel.children,
+                  ct:comment("empty result instead of error")
+          end
       end).
 
 update_other_card(Config) ->
@@ -476,20 +494,89 @@ expected_search_results(Key, Config) ->
 prepare_vcards(Config) ->
     AllVCards
         = escalus_config:get_ct({vcard, data, all_search, expected_vcards}),
-
+    ModVcardBackend = case lists:keyfind(backend, 1, ?config(mod_vcard, Config)) of
+                          {backend, Backend} ->
+                              Backend;
+                          _ ->
+                              mnesia
+                      end,
     lists:foreach(
         fun({JID, Fields}) ->
                 case binary:match(JID, <<"@">>) of
                     nomatch ->
                         ok;
                     _ ->
-                        RJID = get_jid_record(JID),
-                        VCard = escalus_stanza:vcard_update(JID, Fields),
-                        ok = vcard_rpc(RJID,VCard)
+                        prepare_vcard(ModVcardBackend, JID, Fields)
                 end
         end, AllVCards),
     timer:sleep(timer:seconds(3)), %give some time to Yokozuna to index vcards
     Config.
+
+prepare_vcard(ldap, JID, Fields) ->
+    [User, Server] = binary:split(JID, <<"@">>),
+    {EPid, Base} = get_ldap_pid_and_base(Server),
+    VCardMap = [{<<"NICKNAME">>, <<"%u">>, []},
+                {<<"FN">>, <<"%s">>, [<<"displayName">>]},
+                {<<"FAMILY">>, <<"%s">>, [<<"sn">>]},
+                {<<"GIVEN">>, <<"%s">>, [<<"givenName">>]},
+                {<<"MIDDLE">>, <<"%s">>, [<<"initials">>]},
+                {<<"ORGNAME">>, <<"%s">>, [<<"o">>]},
+                {<<"ORGUNIT">>, <<"%s">>, [<<"ou">>]},
+
+                {<<"CTRY">>, <<"%s">>, [<<"c">>]},
+                {<<"LOCALITY">>, <<"%s">>, [<<"l">>]},
+                {<<"STREET">>, <<"%s">>, [<<"street">>]},
+                {<<"REGION">>, <<"%s">>, [<<"st">>]},
+
+                {<<"PCODE">>, <<"%s">>, [<<"postalCode">>]},
+                {<<"TITLE">>, <<"%s">>, [<<"title">>]},
+                {<<"URL">>, <<"%s">>, [<<"labeleduri">>]},
+                {<<"DESC">>, <<"%s">>, [<<"description">>]},
+                {<<"TEL">>, <<"%s">>, [<<"telephoneNumber">>]},
+                {<<"EMAIL">>, <<"%s">>, [<<"mail">>]},
+%%                 {<<"BDAY">>, <<"%s">>, [<<"birthDay">>]}, %OpenLDAP doesn't sport it by default
+                {<<"ROLE">>, <<"%s">>, [<<"employeeType">>]},
+                {<<"PHOTO">>, <<"%s">>, [<<"jpegPhoto">>]}
+    ],
+    Modificators = fields_to_ldap_modificators(VCardMap, Fields, []),
+    Dn = <<"cn=",User/binary,",",Base/binary>>,
+    ok = escalus_ejabberd:rpc(eldap, modify, [EPid, Dn, Modificators]);
+prepare_vcard(_, JID, Fields) ->
+    RJID = get_jid_record(JID),
+    VCard = escalus_stanza:vcard_update(JID, Fields),
+    ok = vcard_rpc(RJID, VCard).
+
+fields_to_ldap_modificators(_, [], Acc) ->
+    Acc;
+fields_to_ldap_modificators(VcardMap, [{Field, Val} | Rest], Acc) when is_binary(Val) ->
+    case vcard_field_to_ldap(VcardMap, Field) of
+        undefined ->
+            NewAcc = Acc;
+        LdapField ->
+            LdapModify = escalus_ejabberd:rpc(eldap, mod_replace, [LdapField, [Val]]),
+            NewAcc = [LdapModify | Acc]
+    end,
+    fields_to_ldap_modificators(VcardMap, Rest, NewAcc);
+fields_to_ldap_modificators(VcardMap, [{_, Children} | Rest], Acc) when is_list(Children) ->
+    NewAcc = fields_to_ldap_modificators(VcardMap, Children, Acc),
+    fields_to_ldap_modificators(VcardMap, Rest, NewAcc).
+
+vcard_field_to_ldap(Map, Field) ->
+    case lists:keyfind(Field, 1, Map) of
+        {Field, _, [LdapField]} ->
+            LdapField;
+        _ ->
+            undefined
+    end.
+
+get_ldap_pid_and_base(Server) ->
+    {ok, State} = escalus_ejabberd:rpc(eldap_utils, get_state,
+        [Server, ejabberd_mod_vcard_ldap]),
+    EldapId = element(4, State),
+    PoolId = binary_to_atom(<<"eldap_pool_", EldapId/binary>>, utf8),
+    Pid = escalus_ejabberd:rpc(pg2, get_closest_pid, [PoolId]),
+    Base = element(10, State),
+    {Pid, Base}.
 
 delete_vcards(Config) ->
      AllVCards
@@ -659,7 +746,12 @@ check_xml_element([{ExpdFieldName, ExpdCData}|Rest], ElUnderTest) ->
         ExpdCData ->
             check_xml_element(Rest, ElUnderTest);
         Else ->
-            ct:fail("Expected ~p got ~p~n", [ExpdCData, Else])
+            case ExpdFieldName == <<"JABBERID">> andalso vcard_simple_SUITE:is_vcard_ldap() of
+                true ->
+                    ok; %%There is no JABBERID field in LDAP
+                _ ->
+                    ct:fail("Expected ~p got ~p~n", [ExpdCData, Else])
+            end
     end.
 
 %% Checks that the elements of two lists with matching keys are equal

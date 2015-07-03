@@ -64,11 +64,23 @@ suite() ->
 %%--------------------------------------------------------------------
 
 init_per_suite(Config) ->
-    NewConfig = escalus:init_per_suite(Config),
+    NewConfig0 = escalus:init_per_suite(Config),
+    NewConfig = case is_vcard_ldap() of
+        true ->
+            configure_ldap_vcards(NewConfig0);
+        _ ->
+            NewConfig0
+    end,
     escalus:create_users(NewConfig, {by_name, [alice, bob]}).
 
 end_per_suite(Config) ->
     NewConfig = escalus:delete_users(Config, {by_name, [alice, bob]}),
+    case is_vcard_ldap() of
+        true ->
+            restore_ldap_vcards_config(Config);
+        _ ->
+            ok
+    end,
     escalus:end_per_suite(NewConfig).
 
 init_per_group(_GN, Config) ->
@@ -433,4 +445,21 @@ get_FN(Config) ->
             <<"Old Name">>
     end.
 
+configure_ldap_vcards(Config) ->
+    Domain = escalus_config:get_config(ejabberd_domain, Config),
+    CurrentConfigs = escalus_ejabberd:rpc(gen_mod, loaded_modules_with_opts, [Domain]),
+    {mod_vcard, CurrentVcardConfig} = lists:keyfind(mod_vcard, 1, CurrentConfigs),
+    dynamic_modules:stop(Domain, mod_vcard),
+    Cfg = [{backend,ldap},
+           {ldap_filter,"(objectClass=inetOrgPerson)"},
+           {ldap_base,"ou=Users,dc=ejd,dc=com"},
+           {ldap_search_fields, [{"Full Name","cn"},{"User","uid"}]},
+           {ldap_vcard_map,[{"FN",[{"%s",["cn"]}]}]}],
+    dynamic_modules:start(Domain, mod_vcard, Cfg),
+    [{mod_vcard, CurrentVcardConfig} | Config].
 
+restore_ldap_vcards_config(Config) ->
+    OriginalConfig = ?config(mod_vcard, Config),
+    Domain = escalus_config:get_config(ejabberd_domain, Config),
+    dynamic_modules:stop(Domain, mod_vcard),
+    dynamic_modules:start(Domain, mod_vcard, OriginalConfig).
