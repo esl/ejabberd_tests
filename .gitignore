@@ -3,3 +3,9 @@
 /ebin
 /deps
 /cover_summary.txt
+
+tests/pubsub_SUITE.erl~
+
+tests/erl_crash.dump
+
+pubsub.spec~
