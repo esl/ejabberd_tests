@@ -21,7 +21,7 @@ all() ->
     [{group, pubsub}].
 
 groups() ->
-      [{pubsub, [sequence], [request_to_create_node, request_to_publish_to_node, request_to_subscribe_to_node]}].
+    [{pubsub, [sequence], [request_to_create_node, request_to_publish_to_node, request_to_subscribe_to_node]}].
 
 
 suite() ->
@@ -32,10 +32,10 @@ suite() ->
 %%--------------------------------------------------------------------
 
 init_per_group(_GroupName, Config) ->
-    escalus:create_users(Config,{by_name, [alice, bob]}).
+    escalus:create_users(Config,{by_name, [alice]}).
 
 end_per_group(_GroupName, Config) ->
-    escalus:delete_users(Config,{by_name, [alice, bob]}).
+    escalus:delete_users(Config,{by_name, [alice]}).
 
 init_per_suite(Config) ->
     escalus:init_per_suite(Config).
@@ -128,12 +128,10 @@ request_to_create_node(Config) ->
 		   fun(Alice) ->
 			   PubSubCreate = create_specific_node_stanza(<<"princely_musings">>),
 			   PubSub = pubsub_stanza([PubSubCreate]),
-			   DestinationNode = <<"localhost">>,
+			   DestinationNode = <<"pubsub.localhost">>,
 			   CreateNodeIq  =  iq_set_get(set, <<"create1">>, DestinationNode, Alice,  PubSub),
 			   escalus:send(Alice, CreateNodeIq),
-
-			   escalus:assert(is_presence,  escalus:wait_for_stanza(Alice))  %% do anything to fail now.
-			   %%escalus:wait_for_stanzas(Alice, 4)							   
+			   escalus:assert(is_iq_result, escalus:wait_for_stanza(Alice)) %% TODO : enhance this check (Example 131)
 		   end).
 
 
@@ -143,13 +141,11 @@ request_to_publish_to_node(Config) ->
      escalus:story(Config, [{alice,1}],
 		   fun(Alice) ->
 			   Publish = create_publish_node_content_stanza(<<"princely_musings">>),
-			   DestinationNode = <<"localhost">>,
+			   DestinationNode = <<"pubsub.localhost">>,
 			   PublishToNodeIq  =  iq_set_get(set, <<"publish1">>, DestinationNode, Alice,  Publish),
 			   escalus:send(Alice, PublishToNodeIq),
-			   
-			   escalus:assert(is_presence,  escalus:wait_for_stanza(Alice))  %% do anything to fail now.
+			   escalus:assert(is_iq_result, escalus:wait_for_stanza(Alice)) %% TODO : enhance this check (Example 100)
 			   %% Detect incoming event message for case with 1-Payload , 2-NoPayload
-			   %%escalus:wait_for_stanzas(Alice, 4)							   
 		   end).
 
 
@@ -160,15 +156,12 @@ request_to_subscribe_to_node(Config) ->
      escalus:story(Config, [{alice,1}],
 		   fun(Alice) ->
 			   Subscribe = create_subscribe_node_stanza(<<"princely_musings">>, Alice),
-			   DestinationNode = <<"localhost">>,
+			   DestinationNode = <<"pubsub.localhost">>,
 			   SubscribeToNodeIq  =  iq_set_get(set, <<"sub1">>, DestinationNode, Alice,  Subscribe),
 			   escalus:send(Alice, SubscribeToNodeIq),
-
-			   escalus:assert(is_presence,  escalus:wait_for_stanza(Alice))  %% do anything to fail now.
+			   escalus:assert(is_iq_result, escalus:wait_for_stanza(Alice)) %% TODO : enhance this check (Example 33)
 			   %% Detect incoming event message for case with 1-Payload , 2-NoPayload
-			   %%escalus:wait_for_stanzas(Alice, 4)							   
 		   end).
-
 
 
 
