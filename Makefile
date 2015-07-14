@@ -2,6 +2,7 @@
 all: test
 
 TESTSPEC ?= default.spec
+TESTSPEC_PUBSUB ?= pubsub.spec
 PRESET   ?= all
 
 test_clean: get-deps
@@ -11,6 +12,14 @@ test_clean: get-deps
 cover_test_clean: get-deps
 	rm -rf tests/*.beam
 	make cover_test
+
+pubsubtest: prepare
+	erl -noinput -sname test -setcookie ejabberd \
+		-pa `pwd`/tests \
+		    `pwd`/ebin \
+			`pwd`/deps/*/ebin \
+		$(ADD_OPTS) \
+		-s run_common_test main test=quick spec=$(TESTSPEC_PUBSUB)
 
 quicktest: prepare
 	erl -noinput -sname test -setcookie ejabberd \
