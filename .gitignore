@@ -9,3 +9,5 @@ tests/pubsub_SUITE.erl~
 tests/erl_crash.dump
 
 pubsub.spec~
+
+.edts
