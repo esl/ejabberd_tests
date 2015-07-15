@@ -208,10 +208,12 @@ request_to_delete_node(Config) ->
 			   ResultStanza = escalus:wait_for_stanza(Alice),
 			   io:format("ResultStanza: ~p~n",[ResultStanza]),
 
-			   QueryStanza = escalus_stanza:iq_with_type_id_from(<<"result">>, <<"delete1">>, <<"alice">>),
-			   io:format("QueryStanza: ~p~n",[QueryStanza]),
+			   %%QueryStanza = escalus_stanza:iq_with_type_id_from(<<"result">>, <<"delete1">>, DestinationNode),
+			   %%io:format("QueryStanza: ~p~n",[QueryStanza]),
+
+			   escalus:assert(is_iq_result, escalus:wait_for_stanza(Alice)) %% TODO : enhance this check (Example 131)
 			   
-			   escalus:assert(is_iq_result, QueryStanza, ResultStanza) %% enhance this check (Example 157)
+%%			   escalus:assert(is_iq_result, QueryStanza, ResultStanza) %% enhance this check (Example 157)
 		   end).
 
 
