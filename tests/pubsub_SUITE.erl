@@ -150,18 +150,6 @@ delete_node_stanza(NodeName) ->
 		      },
     pubsub_stanza([DelNode], ?NS_PUBSUB_OWNER).
 
-%% -----------------------------  dummy test ---------------- del me --------
-
-
-
-available(Config) ->
-    escalus:story(Config, [1], fun(Alice) ->
-
-        escalus:send(Alice, escalus_stanza:presence(<<"available">>)),
-        escalus:assert(is_presence, escalus:wait_for_stanza(Alice))
-
-        end).
-
 
 %% ---END---------- PUB SUB STANZAS -------------
 
@@ -178,16 +166,7 @@ request_to_create_node_success(Config) ->
 			   PubSubCreateIq  =  iq_set_get(set, <<"create1">>, DestinationNode, Alice,  PubSub),
 			   io:format("PubSubCreateIq: ~p~n",[PubSubCreateIq]),
 			   escalus:send(Alice, PubSubCreateIq),
-			   ResultStanza = escalus:wait_for_stanza(Alice),
-			   io:format("ResultStanza: ~p~n",[ResultStanza]),
-
-			   QueryStanza = escalus_stanza:iq_with_type_id_from(<<"result">>, <<"create1">>, DestinationNode),
-			   io:format("QueryStanza: ~p~n",[QueryStanza]),
-
-			   Result = escalus_pred:is_iq_result(QueryStanza, ResultStanza),
-			   io:format(" result - ~p~n", [Result]),
-
-			   Result  %% - Example 131
+			   wait_for_stanza_and_show(Alice, DestinationNode)
 		   end).
 
 
@@ -200,16 +179,7 @@ request_to_publish_to_node_success(Config) ->
 			   PublishToNodeIq  =  iq_set_get(set, <<"publish1">>, DestinationNode, Alice,  PublishToNode),
 			   io:format("PublishToNodeIq: ~p~n",[PublishToNodeIq]),
 			   escalus:send(Alice, PublishToNodeIq),
-
-			   ResultStanza = escalus:wait_for_stanza(Alice),
-			   io:format("ResultStanza: ~p~n",[ResultStanza]),
-			   QueryStanza = escalus_stanza:iq_with_type_id_from(<<"result">>, <<"publish1">>, DestinationNode),
-			   io:format("QueryStanza: ~p~n",[QueryStanza]),
-			   Result = escalus_pred:is_iq_result(QueryStanza, ResultStanza),
-			   io:format(" result - ~p~n", [Result])
-
-			   %%escalus:assert(is_iq_result, escalus:wait_for_stanza(Alice)) %% TODO : enhance this check (Example 100)
-
+			   wait_for_stanza_and_show(Alice, DestinationNode)
 		   end).
 
     
@@ -223,17 +193,7 @@ request_to_subscribe_to_node_success(Config) ->
 			   SubscribeToNodeIq  =  iq_set_get(set, <<"sub1">>, DestinationNode, Alice,  SubscribeToNode),
 			   io:format("SubscribeToNodeIq: ~p~n",[SubscribeToNodeIq]),
 			   escalus:send(Alice, SubscribeToNodeIq),
-
-			   ResultStanza = escalus:wait_for_stanza(Alice),
-			   io:format("ResultStanza: ~p~n",[ResultStanza]),
-			   QueryStanza = escalus_stanza:iq_with_type_id_from(<<"result">>, <<"sub1">>, DestinationNode),
-			   io:format("QueryStanza: ~p~n",[QueryStanza]),
-			   Result = escalus_pred:is_iq_result(QueryStanza, ResultStanza),
-			   io:format(" result - ~p~n", [Result])
-
-
-			   %%escalus:assert(is_iq_result, RecvedStanza) %% TODO : enhance this check (Example 33)
-
+			   wait_for_stanza_and_show(Alice, DestinationNode)
 		   end).
 
 %% XEP0060---6.2.1 Unubscribe from node request --------------------------------------------
@@ -246,17 +206,7 @@ request_to_unsubscribe_from_node_success(Config) ->
 			   UnSubscribeFromNodeIq  =  iq_set_get(set, <<"unsub1">>, DestinationNode, Alice,  UnubscribeFromNode),
 			   io:format("UnSubscribeFromNodeIq: ~p~n",[UnubscribeFromNode]),
 			   escalus:send(Alice, UnSubscribeFromNodeIq),
-
-
-			   ResultStanza = escalus:wait_for_stanza(Alice),
-			   io:format("ResultStanza: ~p~n",[ResultStanza]),
-			   QueryStanza = escalus_stanza:iq_with_type_id_from(<<"result">>, <<"unsub1">>, DestinationNode),
-			   io:format("QueryStanza: ~p~n",[QueryStanza]),
-			   Result = escalus_pred:is_iq_result(QueryStanza, ResultStanza),
-			   io:format(" result - ~p~n", [Result])
-
-			   %%escalus:assert(is_iq_result, RecvedStanza) %% TODO : enhance this check (Example 33)
-
+			   wait_for_stanza_and_show(Alice, DestinationNode)
 		   end).
 
 
@@ -269,23 +219,23 @@ request_to_delete_node_success(Config) ->
 			   DeleteNode = delete_node_stanza(?DEFAULT_TOPIC_NAME),
 			   DestinationNode = ?DEST_NODE_ADDR,
 			   DeleteNodeIq  =  iq_set_get(set, <<"delete1">>, DestinationNode, Alice,  DeleteNode),
-
 			   io:format("DeleteNodeIqToSend: ~p~n",[DeleteNodeIq]),
 			   escalus:send(Alice, DeleteNodeIq),
-
-			   ResultStanza = escalus:wait_for_stanza(Alice),
-			   io:format("ResultStanza: ~p~n",[ResultStanza]),
-			   QueryStanza = escalus_stanza:iq_with_type_id_from(<<"result">>, <<"delete1">>, DestinationNode),
-			   io:format("QueryStanza: ~p~n",[QueryStanza]),
-			   Result = escalus_pred:is_iq_result(QueryStanza, ResultStanza),
-			   io:format(" result - ~p~n", [Result])
-		   
-			   %%escalus:assert(is_iq_result, QueryStanza, ResultStanza) %% enhance this check (Example 157)
+			   wait_for_stanza_and_show(Alice, DestinationNode)
 		   end).
 
 
+%% ----------------------------- HELPER and DIAGNOSTIC functions -----------------------
 
-
+wait_for_stanza_and_show(User, DestinationNode) ->
+    ResultStanza = escalus:wait_for_stanza(User),
+    io:format("ResultStanza: ~p~n",[ResultStanza]),
+    QueryStanza = escalus_stanza:iq_with_type_id_from(<<"result">>, <<"delete1">>, DestinationNode),
+    io:format("QueryStanza: ~p~n",[QueryStanza]),
+    Result = escalus_pred:is_iq_result(QueryStanza, ResultStanza),
+    io:format(" result - ~p~n", [Result]),
+    Result.
+	
 
 
 
