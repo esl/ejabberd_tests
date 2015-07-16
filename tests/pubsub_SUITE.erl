@@ -163,10 +163,12 @@ request_to_create_node_success(Config) ->
 			   PubSubCreate = create_specific_node_stanza(?DEFAULT_TOPIC_NAME),
 			   PubSub = pubsub_stanza([PubSubCreate], ?NS_PUBSUB),
 			   DestinationNode = ?DEST_NODE_ADDR,
-			   PubSubCreateIq  =  iq_set_get(set, <<"create1">>, DestinationNode, Alice,  PubSub),
-			   io:format("PubSubCreateIq: ~p~n",[PubSubCreateIq]),
+			   Id = <<"create1">>,
+			   PubSubCreateIq  =  iq_set_get(set, Id, DestinationNode, Alice,  PubSub),
+
+			   ct:pal(" Request PubSubCreateIq: ~n~p~n",[exml:to_binary(PubSubCreateIq)]),
 			   escalus:send(Alice, PubSubCreateIq),
-			   wait_for_stanza_and_show(Alice, DestinationNode)
+			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
 		   end).
 
 
@@ -176,10 +178,12 @@ request_to_publish_to_node_success(Config) ->
 		   fun(Alice) ->
 			   PublishToNode = create_publish_node_content_stanza(?DEFAULT_TOPIC_NAME),
 			   DestinationNode = ?DEST_NODE_ADDR,
-			   PublishToNodeIq  =  iq_set_get(set, <<"publish1">>, DestinationNode, Alice,  PublishToNode),
-			   io:format("PublishToNodeIq: ~p~n",[PublishToNodeIq]),
+			   Id = <<"publish1">>,
+			   PublishToNodeIq  =  iq_set_get(set, Id, DestinationNode, Alice,  PublishToNode),
+			   ct:pal(" Request PublishToNodeIq: ~n~p~n",[exml:to_binary(PublishToNodeIq)]),
 			   escalus:send(Alice, PublishToNodeIq),
-			   wait_for_stanza_and_show(Alice, DestinationNode)
+			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
+			   %% see example 100
 		   end).
 
     
@@ -190,10 +194,11 @@ request_to_subscribe_to_node_success(Config) ->
 		   fun(Alice) ->
 			   SubscribeToNode = create_subscribe_node_stanza(?DEFAULT_TOPIC_NAME, Alice),
 			   DestinationNode = ?DEST_NODE_ADDR,
-			   SubscribeToNodeIq  =  iq_set_get(set, <<"sub1">>, DestinationNode, Alice,  SubscribeToNode),
-			   io:format("SubscribeToNodeIq: ~p~n",[SubscribeToNodeIq]),
+			   Id = <<"sub1">>,
+			   SubscribeToNodeIq  =  iq_set_get(set, Id, DestinationNode, Alice,  SubscribeToNode),
+			   ct:pal(" Request SubscribeToNodeIq: ~n~p~n",[exml:to_binary(SubscribeToNodeIq)]),
 			   escalus:send(Alice, SubscribeToNodeIq),
-			   wait_for_stanza_and_show(Alice, DestinationNode)
+			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
 		   end).
 
 %% XEP0060---6.2.1 Unubscribe from node request --------------------------------------------
@@ -203,10 +208,11 @@ request_to_unsubscribe_from_node_success(Config) ->
 		   fun(Alice) ->
 			   UnubscribeFromNode = create_unsubscribe_from_node_stanza(?DEFAULT_TOPIC_NAME, Alice),
 			   DestinationNode = ?DEST_NODE_ADDR,
-			   UnSubscribeFromNodeIq  =  iq_set_get(set, <<"unsub1">>, DestinationNode, Alice,  UnubscribeFromNode),
-			   io:format("UnSubscribeFromNodeIq: ~p~n",[UnubscribeFromNode]),
+			   Id = <<"unsub1">>,
+			   UnSubscribeFromNodeIq  =  iq_set_get(set, Id, DestinationNode, Alice,  UnubscribeFromNode),
+			   ct:pal(" Request UnSubscribeFromNodeIq: ~n~p~n",[exml:to_binary(UnSubscribeFromNodeIq)]),
 			   escalus:send(Alice, UnSubscribeFromNodeIq),
-			   wait_for_stanza_and_show(Alice, DestinationNode)
+			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
 		   end).
 
 
@@ -218,22 +224,26 @@ request_to_delete_node_success(Config) ->
 		   fun(Alice) ->
 			   DeleteNode = delete_node_stanza(?DEFAULT_TOPIC_NAME),
 			   DestinationNode = ?DEST_NODE_ADDR,
-			   DeleteNodeIq  =  iq_set_get(set, <<"delete1">>, DestinationNode, Alice,  DeleteNode),
-			   io:format("DeleteNodeIqToSend: ~p~n",[DeleteNodeIq]),
+			   Id = <<"delete1">>,
+			   DeleteNodeIq  =  iq_set_get(set, Id, DestinationNode, Alice,  DeleteNode),
+			   ct:pal(" Request DeleteNodeIq: ~n~p~n",[exml:to_binary(DeleteNodeIq)]),
 			   escalus:send(Alice, DeleteNodeIq),
-			   wait_for_stanza_and_show(Alice, DestinationNode)
+			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
 		   end).
 
 
 %% ----------------------------- HELPER and DIAGNOSTIC functions -----------------------
 
-wait_for_stanza_and_show(User, DestinationNode) ->
+wait_for_stanza_and_show(User, Id, DestinationNode) ->
     ResultStanza = escalus:wait_for_stanza(User),
-    io:format("ResultStanza: ~p~n",[ResultStanza]),
-    QueryStanza = escalus_stanza:iq_with_type_id_from(<<"result">>, <<"delete1">>, DestinationNode),
-    io:format("QueryStanza: ~p~n",[QueryStanza]),
+    ct:pal(" Response stanza from server: ~n~n~s~n", [exml:to_binary(ResultStanza)]),
+
+    QueryStanza = escalus_stanza:iq_with_type_id_from(<<"result">>, Id, DestinationNode),
+%%     ct:pal("QueryStanza: ~s~n",[exml:to_binary(QueryStanza)]),
+
     Result = escalus_pred:is_iq_result(QueryStanza, ResultStanza),
-    io:format(" result - ~p~n", [Result]),
+%%    ct:pal(" result - ~s~n", [exml:to_binary(Result)]),
+
     Result.
 	
 
