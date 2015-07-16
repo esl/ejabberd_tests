@@ -24,10 +24,17 @@
 
 
 all() ->
-    [{group, pubsub_full_cycle}].
+    [{group, pubsub_full_cycle_two_users}].
 
 groups() ->
-    [{pubsub_full_cycle, [sequence], [request_to_create_node_success, request_to_publish_to_node_success, request_to_subscribe_to_node_success, request_to_unsubscribe_from_node_success]}].
+    [{pubsub_full_cycle_two_users, [sequence], [
+				      request_to_create_node_success,
+				      request_to_publish_to_node_success, 
+				      request_to_subscribe_to_node_success,
+				      listen_to_subscribed_node_success,
+				      request_to_unsubscribe_from_node_success
+				     ]}].
+
 %%    [{pubsub, [sequence], [request_to_create_node]}].
 %%    [{pubsub, [sequence], [request_to_create_node, request_to_delete_node_success]}].
 
@@ -52,11 +59,21 @@ init_per_group(_GroupName, Config) ->
 end_per_group(_GroupName, Config) ->
     escalus:delete_users(Config,{by_name, [alice]}).
 
+init_per_testcase(listen_to_subscribed_node_success, Config) ->
+    Config2 = escalus:create_users(Config,{by_name, [bob]}),
+    escalus:init_per_testcase(listen_to_subscribed_node_success, Config2);
+
 init_per_testcase(_TestName, Config) ->
     escalus:init_per_testcase(_TestName, Config).
 
+end_per_testcase(listen_to_subscribed_node_success, Config) ->
+    Config2 = escalus:delete_users(Config,{by_name, [bob]}),
+    escalus:end_per_testcase(listen_to_subscribed_node_success, Config2);
+
 end_per_testcase(_TestName, Config) ->
     escalus:end_per_testcase(_TestName, Config).
+
+
 
 
 
@@ -98,7 +115,7 @@ sample_publish_item_body() ->
     #xmlel{
        name = <<"entry">>,
        attrs = [{<<"xmlns">>, <<"http://www.w3.org/2005/Atom">>}],
-       children = []
+       children = [ #xmlcdata{content=[<<"blabla gugu gaga">>]} ]
       }.
 
 sample_publish_item(Id) ->
@@ -166,7 +183,7 @@ request_to_create_node_success(Config) ->
 			   Id = <<"create1">>,
 			   PubSubCreateIq  =  iq_set_get(set, Id, DestinationNode, Alice,  PubSub),
 
-			   ct:pal(" Request PubSubCreateIq: ~n~p~n",[exml:to_binary(PubSubCreateIq)]),
+			   ct:pal(" Request PubSubCreateIq: ~n~n~p~n",[exml:to_binary(PubSubCreateIq)]),
 			   escalus:send(Alice, PubSubCreateIq),
 			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
 		   end).
@@ -180,7 +197,7 @@ request_to_publish_to_node_success(Config) ->
 			   DestinationNode = ?DEST_NODE_ADDR,
 			   Id = <<"publish1">>,
 			   PublishToNodeIq  =  iq_set_get(set, Id, DestinationNode, Alice,  PublishToNode),
-			   ct:pal(" Request PublishToNodeIq: ~n~p~n",[exml:to_binary(PublishToNodeIq)]),
+			   ct:pal(" Request PublishToNodeIq: ~n~n~p~n",[exml:to_binary(PublishToNodeIq)]),
 			   escalus:send(Alice, PublishToNodeIq),
 			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
 			   %% see example 100
@@ -196,10 +213,32 @@ request_to_subscribe_to_node_success(Config) ->
 			   DestinationNode = ?DEST_NODE_ADDR,
 			   Id = <<"sub1">>,
 			   SubscribeToNodeIq  =  iq_set_get(set, Id, DestinationNode, Alice,  SubscribeToNode),
-			   ct:pal(" Request SubscribeToNodeIq: ~n~p~n",[exml:to_binary(SubscribeToNodeIq)]),
+			   ct:pal(" Request SubscribeToNodeIq: ~n~n~p~n",[exml:to_binary(SubscribeToNodeIq)]),
 			   escalus:send(Alice, SubscribeToNodeIq),
 			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
 		   end).
+
+%% XEP0060---7.1.2 Consume notification including payload-------------------------------------
+listen_to_subscribed_node_success(Config) ->
+     escalus:story(Config, [{bob,1}],
+		   fun(Bob) ->
+			   SubscribeToNode = create_subscribe_node_stanza(?DEFAULT_TOPIC_NAME, Bob),
+			   DestinationNode = ?DEST_NODE_ADDR,
+			   Id = <<"bobsub1">>,
+			   SubscribeToNodeIq  =  iq_set_get(set, Id, DestinationNode, Bob,  SubscribeToNode),
+			   ct:pal(" Request SubscribeToNodeIq from Bob: ~n~n~p~n",[exml:to_binary(SubscribeToNodeIq)]),
+			   escalus:send(Bob, SubscribeToNodeIq),
+			   %% First - confirm subscription
+			   Res1 = wait_for_stanza_and_show(Bob, Id, DestinationNode),
+			   %% Second - wait for notification with payload (alice already published)
+			   ResultNotificationStanza = escalus:wait_for_stanza(Bob),
+			   ct:pal(" --- got from server ---- : ~n~n~p~n", [exml:to_binary(ResultNotificationStanza)]),
+			   Res1
+			   
+			   %% see example 101    
+		   end).
+
+    
 
 %% XEP0060---6.2.1 Unubscribe from node request --------------------------------------------
 request_to_unsubscribe_from_node_success(Config) ->
@@ -210,7 +249,7 @@ request_to_unsubscribe_from_node_success(Config) ->
 			   DestinationNode = ?DEST_NODE_ADDR,
 			   Id = <<"unsub1">>,
 			   UnSubscribeFromNodeIq  =  iq_set_get(set, Id, DestinationNode, Alice,  UnubscribeFromNode),
-			   ct:pal(" Request UnSubscribeFromNodeIq: ~n~p~n",[exml:to_binary(UnSubscribeFromNodeIq)]),
+			   ct:pal(" Request UnSubscribeFromNodeIq: ~n~n~p~n",[exml:to_binary(UnSubscribeFromNodeIq)]),
 			   escalus:send(Alice, UnSubscribeFromNodeIq),
 			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
 		   end).
@@ -226,7 +265,7 @@ request_to_delete_node_success(Config) ->
 			   DestinationNode = ?DEST_NODE_ADDR,
 			   Id = <<"delete1">>,
 			   DeleteNodeIq  =  iq_set_get(set, Id, DestinationNode, Alice,  DeleteNode),
-			   ct:pal(" Request DeleteNodeIq: ~n~p~n",[exml:to_binary(DeleteNodeIq)]),
+			   ct:pal(" Request DeleteNodeIq: ~n~n~p~n",[exml:to_binary(DeleteNodeIq)]),
 			   escalus:send(Alice, DeleteNodeIq),
 			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
 		   end).
@@ -239,10 +278,10 @@ wait_for_stanza_and_show(User, Id, DestinationNode) ->
     ct:pal(" Response stanza from server: ~n~n~s~n", [exml:to_binary(ResultStanza)]),
 
     QueryStanza = escalus_stanza:iq_with_type_id_from(<<"result">>, Id, DestinationNode),
-%%     ct:pal("QueryStanza: ~s~n",[exml:to_binary(QueryStanza)]),
+    %%  ct:pal("QueryStanza: ~s~n",[exml:to_binary(QueryStanza)]),
 
     Result = escalus_pred:is_iq_result(QueryStanza, ResultStanza),
-%%    ct:pal(" result - ~s~n", [exml:to_binary(Result)]),
+    %%  ct:pal(" result - ~s~n", [exml:to_binary(Result)]),
 
     Result.
 	
