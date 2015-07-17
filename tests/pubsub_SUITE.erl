@@ -97,17 +97,12 @@ create_specific_node_stanza(NodeName) ->
        name = <<"create">>,
        attrs = [{<<"node">>, NodeName}] }.
 
-iq_set_get(set, Id, To, From,  Body) ->
-    S1 = escalus_stanza:iq(To, <<"set">>, Body),
-    iq_set_get_rest(S1, Id, From);
-    
-
-iq_set_get(get, Id, To, From,  Body) ->
-    S1 = escalus_stnanza:iq(To, <<"get">>, Body),
+iq_with_id(TypeAtom, Id, To, From, Body) ->
+    S1 = escalus_stanza:iq(To, atom_to_binary(TypeAtom, latin1), Body),
     iq_set_get_rest(S1, Id, From).
 
-iq_set_get_rest(PrevPart, Id, From) ->
-    S2 = escalus_stanza:set_id(PrevPart, Id),							
+iq_set_get_rest(SrcIq, Id, From) ->
+    S2 = escalus_stanza:set_id(SrcIq, Id),							
     escalus_stanza:from(S2, escalus_utils:get_jid(From)).
 
 
@@ -181,13 +176,12 @@ request_to_create_node_success(Config) ->
 			   PubSub = pubsub_stanza([PubSubCreate], ?NS_PUBSUB),
 			   DestinationNode = ?DEST_NODE_ADDR,
 			   Id = <<"create1">>,
-			   PubSubCreateIq  =  iq_set_get(set, Id, DestinationNode, Alice,  PubSub),
-
+			   PubSubCreateIq  =  iq_with_id(set, Id, DestinationNode, Alice,  [PubSub]),
 			   ct:pal(" Request PubSubCreateIq: ~n~n~p~n",[exml:to_binary(PubSubCreateIq)]),
 			   escalus:send(Alice, PubSubCreateIq),
-			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
+			   {true, _RecvdStanza} = wait_for_stanza_and_match_iq(Alice, Id, DestinationNode)
+			   %% example 131
 		   end).
-
 
 %% XEP0060---7.1.1 Request to publish to a node -----------------------------------------
 request_to_publish_to_node_success(Config) ->
@@ -196,42 +190,45 @@ request_to_publish_to_node_success(Config) ->
 			   PublishToNode = create_publish_node_content_stanza(?DEFAULT_TOPIC_NAME),
 			   DestinationNode = ?DEST_NODE_ADDR,
 			   Id = <<"publish1">>,
-			   PublishToNodeIq  =  iq_set_get(set, Id, DestinationNode, Alice,  PublishToNode),
+			   PublishToNodeIq  =  iq_with_id(set, Id, DestinationNode, Alice,  [PublishToNode]),
 			   ct:pal(" Request PublishToNodeIq: ~n~n~p~n",[exml:to_binary(PublishToNodeIq)]),
 			   escalus:send(Alice, PublishToNodeIq),
-			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
+			   {true, _RecvdStanza} = wait_for_stanza_and_match_iq(Alice, Id, DestinationNode)
 			   %% see example 100
 		   end).
 
     
 %% XEP0060---6.1.1 Subscribe to node request --------------------------------------------
+%% Note: it is the OWNER and PUBLISHER Alice who is subscribing...
 request_to_subscribe_to_node_success(Config) ->
-
      escalus:story(Config, [1],
 		   fun(Alice) ->
 			   SubscribeToNode = create_subscribe_node_stanza(?DEFAULT_TOPIC_NAME, Alice),
 			   DestinationNode = ?DEST_NODE_ADDR,
 			   Id = <<"sub1">>,
-			   SubscribeToNodeIq  =  iq_set_get(set, Id, DestinationNode, Alice,  SubscribeToNode),
+			   SubscribeToNodeIq  =  iq_with_id(set, Id, DestinationNode, Alice,  [SubscribeToNode]),
 			   ct:pal(" Request SubscribeToNodeIq: ~n~n~p~n",[exml:to_binary(SubscribeToNodeIq)]),
 			   escalus:send(Alice, SubscribeToNodeIq),
-			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
+			   {true, RecvdStanza} = wait_for_stanza_and_match_iq(Alice, Id, DestinationNode),
+			   is_subscription_for_jid_pred(RecvdStanza, Alice)
+			   %% see example 33
 		   end).
 
 %% XEP0060---7.1.2 Consume notification including payload-------------------------------------
+%% Bob is subscribing and waits for notification since Alice has already published
 listen_to_subscribed_node_success(Config) ->
      escalus:story(Config, [{bob,1}],
 		   fun(Bob) ->
 			   SubscribeToNode = create_subscribe_node_stanza(?DEFAULT_TOPIC_NAME, Bob),
 			   DestinationNode = ?DEST_NODE_ADDR,
 			   Id = <<"bobsub1">>,
-			   SubscribeToNodeIq  =  iq_set_get(set, Id, DestinationNode, Bob,  SubscribeToNode),
+			   SubscribeToNodeIq  =  iq_with_id(set, Id, DestinationNode, Bob,  [SubscribeToNode]),
 			   ct:pal(" Request SubscribeToNodeIq from Bob: ~n~n~p~n",[exml:to_binary(SubscribeToNodeIq)]),
 			   escalus:send(Bob, SubscribeToNodeIq),
 			   %% First - confirm subscription
-			   Res1 = wait_for_stanza_and_show(Bob, Id, DestinationNode),
+			   {true, Res1} = wait_for_stanza_and_match_iq(Bob, Id, DestinationNode), %%wait for subscr. confirmation
 			   %% Second - wait for notification with payload (alice already published)
-			   ResultNotificationStanza = escalus:wait_for_stanza(Bob),
+			   ResultNotificationStanza = escalus:wait_for_stanza(Bob), %%and wait for the notification
 			   ct:pal(" --- got from server ---- : ~n~n~p~n", [exml:to_binary(ResultNotificationStanza)]),
 			   Res1
 			   
@@ -248,10 +245,10 @@ request_to_unsubscribe_from_node_success(Config) ->
 			   UnubscribeFromNode = create_unsubscribe_from_node_stanza(?DEFAULT_TOPIC_NAME, Alice),
 			   DestinationNode = ?DEST_NODE_ADDR,
 			   Id = <<"unsub1">>,
-			   UnSubscribeFromNodeIq  =  iq_set_get(set, Id, DestinationNode, Alice,  UnubscribeFromNode),
+			   UnSubscribeFromNodeIq  =  iq_with_id(set, Id, DestinationNode, Alice,  [UnubscribeFromNode]),
 			   ct:pal(" Request UnSubscribeFromNodeIq: ~n~n~p~n",[exml:to_binary(UnSubscribeFromNodeIq)]),
 			   escalus:send(Alice, UnSubscribeFromNodeIq),
-			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
+			   {true, _RecvdStanza} = wait_for_stanza_and_match_iq(Alice, Id, DestinationNode)
 		   end).
 
 
@@ -264,16 +261,17 @@ request_to_delete_node_success(Config) ->
 			   DeleteNode = delete_node_stanza(?DEFAULT_TOPIC_NAME),
 			   DestinationNode = ?DEST_NODE_ADDR,
 			   Id = <<"delete1">>,
-			   DeleteNodeIq  =  iq_set_get(set, Id, DestinationNode, Alice,  DeleteNode),
+			   DeleteNodeIq  =  iq_with_id(set, Id, DestinationNode, Alice,  [DeleteNode]),
 			   ct:pal(" Request DeleteNodeIq: ~n~n~p~n",[exml:to_binary(DeleteNodeIq)]),
 			   escalus:send(Alice, DeleteNodeIq),
-			   wait_for_stanza_and_show(Alice, Id, DestinationNode)
+			   {true, _RecvdStanza} = wait_for_stanza_and_match_iq(Alice, Id, DestinationNode)
 		   end).
 
 
 %% ----------------------------- HELPER and DIAGNOSTIC functions -----------------------
 
-wait_for_stanza_and_show(User, Id, DestinationNode) ->
+%% Checks superficialy is IQ from server  matches the sent id, there is "result" and sender is correct.
+wait_for_stanza_and_match_iq(User, Id, DestinationNode) ->
     ResultStanza = escalus:wait_for_stanza(User),
     ct:pal(" Response stanza from server: ~n~n~s~n", [exml:to_binary(ResultStanza)]),
 
@@ -283,8 +281,36 @@ wait_for_stanza_and_show(User, Id, DestinationNode) ->
     Result = escalus_pred:is_iq_result(QueryStanza, ResultStanza),
     %%  ct:pal(" result - ~s~n", [exml:to_binary(Result)]),
 
-    Result.
+    {Result, ResultStanza}.
+
+%% generate dummy subscription confirmation from server. Used to test predicate function.
+get_subscription_confirmation_stanza() ->
+   Subscription = #xmlel{name = <<"subscription">>, attrs=[{<<"jid">>, <<"alice@localhost">>}]},
+   PubSub = pubsub_stanza([Subscription], ?NS_PUBSUB),
+   DestinationNode = ?DEST_NODE_ADDR,
+   Id = <<"sub1">>,
+   PubSubItemIq  =  iq_with_id(set, Id, DestinationNode, <<"Alice">>,  [PubSub]),
+   %%io:format(" ---- ~n~p~n ", [PubSubItemIq]),
+   %%B = exml:to_binary(PubSubItemIq),
+   %%io:format(" ---- ~n~p~n ", [B]),
+   PubSubItemIq.
 	
+is_subscription_for_jid_pred(SubscrConfirmation, User) ->
+    %% Stanza = get_subscription_confirmation_stanza(),
+    %% R = exml_query:path(Stanza, <<"pubsub>>">>),
+    R1 = exml_query:subelement(SubscrConfirmation, <<"pubsub">>),
+    io:format(" -- ~n~p",[R1]),
+    R2 = exml_query:subelement(R1, <<"subscription">>),
+    io:format(" ------ ~n~p",[R2]),
+    JidOfSubscr = exml_query:attr(R2, <<"jid">>),
+    io:format(" -- jid found : ~n~p", [JidOfSubscr]),
+    escalus:assert(JidOfSubscr,  escalus_utils:get_jid(User)).
+
+
+
+
+
+
 
 
 
