@@ -28,17 +28,16 @@ all() ->
 
 groups() ->
     [{pubsub_full_cycle_two_users, [sequence], [
-				      request_to_create_node_success,
-				      request_to_publish_to_node_success, 
-				      request_to_subscribe_to_node_success,
-				      listen_to_subscribed_node_success,
-				      request_to_unsubscribe_from_node_success
+						request_to_create_node_success,
+						request_to_publish_to_node_success, 
+						request_to_subscribe_to_node_success,
+						%%listen_to_subscribed_node_success,
+						request_all_items_from_node_success,
+						request_to_unsubscribe_from_node_success
 				     ]}].
 
 %%    [{pubsub, [sequence], [request_to_create_node]}].
 %%    [{pubsub, [sequence], [request_to_create_node, request_to_delete_node_success]}].
-
-
 
 suite() ->
     escalus:suite().
@@ -54,21 +53,21 @@ end_per_suite(Config) ->
     escalus:end_per_suite(Config).
 
 init_per_group(_GroupName, Config) ->
-    escalus:create_users(Config,{by_name, [alice]}).
+    escalus:create_users(Config,{by_name, [alice, bob]}).
 
 end_per_group(_GroupName, Config) ->
-    escalus:delete_users(Config,{by_name, [alice]}).
+    escalus:delete_users(Config,{by_name, [alice, bob]}).
 
 init_per_testcase(listen_to_subscribed_node_success, Config) ->
-    Config2 = escalus:create_users(Config,{by_name, [bob]}),
-    escalus:init_per_testcase(listen_to_subscribed_node_success, Config2);
+    %% Config2 = escalus:create_users(Config,{by_name, [bob]}),
+    escalus:init_per_testcase(listen_to_subscribed_node_success, Config);
 
 init_per_testcase(_TestName, Config) ->
     escalus:init_per_testcase(_TestName, Config).
 
 end_per_testcase(listen_to_subscribed_node_success, Config) ->
-    Config2 = escalus:delete_users(Config,{by_name, [bob]}),
-    escalus:end_per_testcase(listen_to_subscribed_node_success, Config2);
+    %% Config2 = escalus:delete_users(Config,{by_name, [bob]}),
+    escalus:end_per_testcase(listen_to_subscribed_node_success, Config);
 
 end_per_testcase(_TestName, Config) ->
     escalus:end_per_testcase(_TestName, Config).
@@ -113,10 +112,10 @@ sample_publish_item_body() ->
        children = [ #xmlcdata{content=[<<"blabla gugu gaga">>]} ]
       }.
 
-sample_publish_item(Id) ->
+sample_publish_item(ItemId) ->
     #xmlel{
        name = <<"item">>,
-       attrs = [{<<"id">>, Id}],
+       attrs = [{<<"id">>, ItemId}],
        children = sample_publish_item_body()
       }.
 
@@ -126,7 +125,6 @@ sample_publish_node_with_content(NodeName) ->
        attrs = [{<<"node">>, NodeName}],
        children = sample_publish_item(<<"abc123">>)
       }.
-  
 
 create_publish_node_content_stanza(NodeName) ->
     PublNode = sample_publish_node_with_content(NodeName),
@@ -139,11 +137,13 @@ create_subscribe_node_stanza(NodeName, From) ->
     SubsrNode = create_sub_unsubscribe_from_node_stanza(NodeName, From, <<"subscribe">>),
     pubsub_stanza([SubsrNode], ?NS_PUBSUB).
 
+create_request_allitems_stanza(NodeName) ->
+    AllItems = #xmlel{name = <<"items">>, attrs=[{<<"node">>, NodeName}]},
+    pubsub_stanza([AllItems], ?NS_PUBSUB).
 
 create_unsubscribe_from_node_stanza(NodeName, From) ->
     UnsubsrNode = create_sub_unsubscribe_from_node_stanza(NodeName, From, <<"unsubscribe">>),
     pubsub_stanza([UnsubsrNode], ?NS_PUBSUB).
-
 
 create_sub_unsubscribe_from_node_stanza(NodeName, From, SubUnsubType) ->
     #xmlel{name = SubUnsubType,
@@ -214,8 +214,6 @@ request_to_subscribe_to_node_success(Config) ->
 			   %% see example 33
 		   end).
 
-%% XEP0060---7.1.2 Consume notification including payload-------------------------------------
-%% Bob is subscribing and waits for notification since Alice has already published
 listen_to_subscribed_node_success(Config) ->
      escalus:story(Config, [{bob,1}],
 		   fun(Bob) ->
@@ -233,6 +231,23 @@ listen_to_subscribed_node_success(Config) ->
 			   Res1
 			   
 			   %% see example 101    
+		   end).
+
+
+%% XEP0060---6.5.2 Request all items from node--------------------------------------------------
+%% Bob is requesting all items in open access mode (no subscription)
+request_all_items_from_node_success(Config) ->
+     escalus:story(Config, [{bob,1}],
+		   fun(Bob) ->
+			   RequestAllItems = create_request_allitems_stanza(?DEFAULT_TOPIC_NAME),
+			   DestinationNode = ?DEST_NODE_ADDR,
+			   Id = <<"items1">>,
+			   RequestAllItemsIq  =  iq_with_id(get, Id, DestinationNode, Bob,  [RequestAllItems]),
+			   ct:pal(" Request all items (Bob): ~n~n~p~n",[exml:to_binary(RequestAllItemsIq)]),
+			   escalus:send(Bob, RequestAllItemsIq),
+			   {true, _Res1} = wait_for_stanza_and_match_iq(Bob, Id, DestinationNode) %%wait for subscr. confirmation
+			   
+			   %% see example 78
 		   end).
 
     
@@ -304,7 +319,7 @@ is_subscription_for_jid_pred(SubscrConfirmation, User) ->
     io:format(" ------ ~n~p",[R2]),
     JidOfSubscr = exml_query:attr(R2, <<"jid">>),
     io:format(" -- jid found : ~n~p", [JidOfSubscr]),
-    escalus:assert(JidOfSubscr,  escalus_utils:get_jid(User)).
+    JidOfSubscr =:= escalus_utils:get_jid(User).
 
 
 
