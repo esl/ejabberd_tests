@@ -105,29 +105,57 @@ iq_set_get_rest(SrcIq, Id, From) ->
     escalus_stanza:from(S2, escalus_utils:get_jid(From)).
 
 
-sample_publish_item_body() ->
+entry_body_sample1() ->
+    [
+     #xmlel{name = <<"title">>, children  = [ #xmlcdata{content=[<<"The title of content.">>]}]},
+     #xmlel{name = <<"summary">>, children= [ #xmlcdata{content=[<<"To be or not to be...">>]}]}
+    ].
+
+entry_body_sample_debice_id() ->
+    [
+     #xmlel{name = <<"DEVICE_ID">>, children  = [ #xmlcdata{content=[<<"2F:AB:28:FF">>]}]}
+    ].
+
+
+%% provide EntryBody as list of anything compliant with exml entity records.
+publish_entry(EntryBody) ->
     #xmlel{
        name = <<"entry">>,
        attrs = [{<<"xmlns">>, <<"http://www.w3.org/2005/Atom">>}],
-       children = [ #xmlcdata{content=[<<"blabla gugu gaga">>]} ]
+       children = case EntryBody of 
+		      #xmlel{} -> EntryBody;
+		      _ -> entry_body_sample1()
+		  end
       }.
 
-sample_publish_item(ItemId) ->
+publish_item(ItemId, PublishEntry) ->
     #xmlel{
        name = <<"item">>,
        attrs = [{<<"id">>, ItemId}],
-       children = sample_publish_item_body()
+       children = case PublishEntry of
+		      #xmlel{} ->
+			  PublishEntry;
+		      _ ->
+			publish_entry([])
+		   end
       }.
 
-sample_publish_node_with_content(NodeName) ->
+sample_publish_node_with_content(NodeName, ItemToPublish) ->
     #xmlel{
        name = <<"publish">>,
        attrs = [{<<"node">>, NodeName}],
-       children = sample_publish_item(<<"abc123">>)
+       children = case ItemToPublish of
+		      #xmlel{} -> 
+			  ItemToPublish;
+		      _ -> 
+			  publish_item(<<"abc123">>, [])
+		  end
       }.
 
 create_publish_node_content_stanza(NodeName) ->
-    PublNode = sample_publish_node_with_content(NodeName),
+    PublishEntry = publish_entry([]),
+    ItemTopublish = publish_item(<<"abc123">>, PublishEntry),
+    PublNode = sample_publish_node_with_content(NodeName, ItemTopublish),
     pubsub_stanza([PublNode], ?NS_PUBSUB).
 
 %% ------------ subscribe - unscubscribe -----------
@@ -200,6 +228,8 @@ request_to_publish_to_node_success(Config) ->
     
 %% XEP0060---6.1.1 Subscribe to node request --------------------------------------------
 %% Note: it is the OWNER and PUBLISHER Alice who is subscribing...
+%% This is probably a corner case - typically owner is auto-subscribed to node he created.
+%% Such a test should not faild anyway.
 request_to_subscribe_to_node_success(Config) ->
      escalus:story(Config, [1],
 		   fun(Alice) ->
@@ -214,6 +244,7 @@ request_to_subscribe_to_node_success(Config) ->
 			   %% see example 33
 		   end).
 
+%% ---- 
 listen_to_subscribed_node_success(Config) ->
      escalus:story(Config, [{bob,1}],
 		   fun(Bob) ->
@@ -245,7 +276,8 @@ request_all_items_from_node_success(Config) ->
 			   RequestAllItemsIq  =  iq_with_id(get, Id, DestinationNode, Bob,  [RequestAllItems]),
 			   ct:pal(" Request all items (Bob): ~n~n~p~n",[exml:to_binary(RequestAllItemsIq)]),
 			   escalus:send(Bob, RequestAllItemsIq),
-			   {true, _Res1} = wait_for_stanza_and_match_iq(Bob, Id, DestinationNode) %%wait for subscr. confirmation
+			   {true, Res1} = wait_for_stanza_and_match_iq(Bob, Id, DestinationNode), %%wait for subscr. confirmation
+       			   ct:pal(" Requested items for Bob: ~n~n~p~n",[exml:to_binary(Res1)])
 			   
 			   %% see example 78
 		   end).
