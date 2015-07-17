@@ -33,6 +33,7 @@ groups() ->
 						request_to_subscribe_to_node_success,
 						request_to_subscribe_to_node_by_owner_success,
 						request_all_items_from_node_success,
+						%%request_to_retract_item_success,
 						%%request_to_retrieve_subscription_list_by_owner_success,
 						request_to_unsubscribe_from_node_by_owner_success
 						%%request_to_delete_node_success
@@ -152,11 +153,19 @@ sample_publish_node_with_content(NodeName, ItemToPublish) ->
 		  end
       }.
 
-create_publish_node_content_stanza(NodeName) ->
+create_publish_node_content_stanza(NodeName, ItemId) ->
     PublishEntry = publish_entry([]),
-    ItemTopublish = publish_item(<<"abc123">>, PublishEntry),
+    ItemTopublish = publish_item(ItemId, PublishEntry),
     PublNode = sample_publish_node_with_content(NodeName, ItemTopublish),
     pubsub_stanza([PublNode], ?NS_PUBSUB).
+
+
+retract_from_node_stanza(NodeName, ItemId) ->
+    ItemToRetract = #xmlel{name = <<"item">>, attrs=[{<<"id">>, ItemId}], children=[]},
+    RetractNode =  #xmlel{name = <<"retract">>, attrs=[{<<"node">>, NodeName}], children=[ItemToRetract]},
+    pubsub_stanza([RetractNode], ?NS_PUBSUB).
+
+    
 
 %% ------------ subscribe - unscubscribe -----------
 
@@ -218,10 +227,11 @@ request_to_create_node_success(Config) ->
 		   end).
 
 %% XEP0060---7.1.1 Request to publish to a node -----------------------------------------
+%% item with ID=abc123 is being published - use this id for retract and other tests in this group
 request_to_publish_to_node_success(Config) ->
      escalus:story(Config, [1],
 		   fun(Alice) ->
-			   PublishToNode = create_publish_node_content_stanza(?DEFAULT_TOPIC_NAME),
+			   PublishToNode = create_publish_node_content_stanza(?DEFAULT_TOPIC_NAME, <<"abc123">>),
 			   DestinationNode = ?DEST_NODE_ADDR,
 			   Id = <<"publish1">>,
 			   PublishToNodeIq  =  iq_with_id(set, Id, DestinationNode, Alice,  [PublishToNode]),
@@ -231,6 +241,24 @@ request_to_publish_to_node_success(Config) ->
 			   %% see example 100
 		   end).
 
+%% XEP0060---7.2.1 Request delete item from node -----------------------------------------
+%% Alice as Owner and Publisher might want to delete previously published item
+%% In this case it is item with ID=abc123
+request_to_retract_item_success(Config) ->
+    %% dupa, sypie sie
+     escalus:story(Config, [1],
+		   fun(Alice) ->
+			   RetractFromNode = retract_from_node_stanza(?DEFAULT_TOPIC_NAME, <<"abc123">>),
+			   DestinationNode = ?DEST_NODE_ADDR,
+			   Id = <<"retract1">>,
+			   RetractFromNodeIq  =  iq_with_id(set, Id, DestinationNode, Alice,  [RetractFromNode]),
+			   ct:pal(" Request RetractFromNodeIq: ~n~n~p~n",[exml:to_binary(RetractFromNodeIq)]),
+			   escalus:send(Alice, RetractFromNodeIq),
+			   {true, _RecvdStanza} = wait_for_stanza_and_match_iq(Alice, Id, DestinationNode)
+			   %% see example 115
+		   end).
+
+
     
 %% XEP0060---6.1.1 Subscribe to node request --------------------------------------------
 %% Note: it is the OWNER and PUBLISHER Alice who is subscribing...
@@ -239,26 +267,25 @@ request_to_publish_to_node_success(Config) ->
 request_to_subscribe_to_node_by_owner_success(Config) ->
      escalus:story(Config, [1],
 		   fun(Alice) ->
-			   subscribe_by_user(Alice)
+			   subscribe_by_user(Alice, ?DEFAULT_TOPIC_NAME, ?DEST_NODE_ADDR)
 			   %% %% see example 33
 		   end).
 
 request_to_subscribe_to_node_success(Config) ->
      escalus:story(Config, [{bob,1}],
 		   fun(Bob) ->
-			   subscribe_by_user(Bob)
+			   subscribe_by_user(Bob, ?DEFAULT_TOPIC_NAME, ?DEST_NODE_ADDR)
 			   %% %% see example 101    
 		   end).
 
-subscribe_by_user(User) ->
-    SubscribeToNode = create_subscribe_node_stanza(?DEFAULT_TOPIC_NAME, User),
+subscribe_by_user(User, NodeName, NodeAddress) ->
+    SubscribeToNode = create_subscribe_node_stanza(NodeName, User),
     UserName = escalus_utils:get_username(User),
-    DestinationNode = ?DEST_NODE_ADDR,
     Id = <<UserName/binary,<<"bobsub1">>/binary>>,
-    SubscribeToNodeIq  =  iq_with_id(set, Id, DestinationNode, User,  [SubscribeToNode]),
+    SubscribeToNodeIq  =  iq_with_id(set, Id, NodeAddress, User,  [SubscribeToNode]),
     ct:pal(" Request SubscribeToNodeIq from user ~p: ~n~p~n",[UserName, exml:to_binary(SubscribeToNodeIq)]),
     escalus:send(User, SubscribeToNodeIq),
-    {true, RecvdStanza} = wait_for_stanza_and_match_iq(User, Id, DestinationNode), %%wait for subscr. confirmation
+    {true, RecvdStanza} = wait_for_stanza_and_match_iq(User, Id, NodeAddress), %%wait for subscr. confirmation
     ct:pal("Subscriptions received by ~p: ~s~n",[UserName, exml:to_binary(RecvdStanza)]),
     is_subscription_for_jid_pred(RecvdStanza, User).
 
