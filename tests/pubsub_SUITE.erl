@@ -31,13 +31,13 @@ groups() ->
 						request_to_create_node_success,
 						request_to_publish_to_node_success, 
 						request_to_subscribe_to_node_success,
-						%%listen_to_subscribed_node_success,
+						request_to_subscribe_to_node_by_owner_success,
 						request_all_items_from_node_success,
-						request_to_unsubscribe_from_node_success
+						%%request_to_retrieve_subscription_list_by_owner_success,
+						request_to_unsubscribe_from_node_by_owner_success
+						%%request_to_delete_node_success
 				     ]}].
 
-%%    [{pubsub, [sequence], [request_to_create_node]}].
-%%    [{pubsub, [sequence], [request_to_create_node, request_to_delete_node_success]}].
 
 suite() ->
     escalus:suite().
@@ -58,16 +58,16 @@ init_per_group(_GroupName, Config) ->
 end_per_group(_GroupName, Config) ->
     escalus:delete_users(Config,{by_name, [alice, bob]}).
 
-init_per_testcase(listen_to_subscribed_node_success, Config) ->
+init_per_testcase(request_to_subscribe_to_node_success, Config) ->
     %% Config2 = escalus:create_users(Config,{by_name, [bob]}),
-    escalus:init_per_testcase(listen_to_subscribed_node_success, Config);
+    escalus:init_per_testcase(request_to_subscribe_to_node_success, Config);
 
 init_per_testcase(_TestName, Config) ->
     escalus:init_per_testcase(_TestName, Config).
 
-end_per_testcase(listen_to_subscribed_node_success, Config) ->
+end_per_testcase(request_to_subscribe_to_node_success, Config) ->
     %% Config2 = escalus:delete_users(Config,{by_name, [bob]}),
-    escalus:end_per_testcase(listen_to_subscribed_node_success, Config);
+    escalus:end_per_testcase(request_to_subscribe_to_node_success, Config);
 
 end_per_testcase(_TestName, Config) ->
     escalus:end_per_testcase(_TestName, Config).
@@ -184,11 +184,17 @@ create_sub_unsubscribe_from_node_stanza(NodeName, From, SubUnsubType) ->
 
 delete_node_stanza(NodeName) ->
     DelNode = #xmlel{name = <<"delete">>,
-		      attrs = [
-			       {<<"node">>, NodeName}
-			      ]
+		      attrs = [{<<"node">>, NodeName}]
 		      },
     pubsub_stanza([DelNode], ?NS_PUBSUB_OWNER).
+
+
+retrieve_subscriptions_stanza(NodeName) ->
+    RetrieveNode = #xmlel{name = <<"subscriptions">>,
+		      attrs = [{<<"node">>, NodeName}]
+		      },
+    pubsub_stanza([RetrieveNode], ?NS_PUBSUB_OWNER).
+
 
 
 %% ---END---------- PUB SUB STANZAS -------------
@@ -230,39 +236,31 @@ request_to_publish_to_node_success(Config) ->
 %% Note: it is the OWNER and PUBLISHER Alice who is subscribing...
 %% This is probably a corner case - typically owner is auto-subscribed to node he created.
 %% Such a test should not faild anyway.
-request_to_subscribe_to_node_success(Config) ->
+request_to_subscribe_to_node_by_owner_success(Config) ->
      escalus:story(Config, [1],
 		   fun(Alice) ->
-			   SubscribeToNode = create_subscribe_node_stanza(?DEFAULT_TOPIC_NAME, Alice),
-			   DestinationNode = ?DEST_NODE_ADDR,
-			   Id = <<"sub1">>,
-			   SubscribeToNodeIq  =  iq_with_id(set, Id, DestinationNode, Alice,  [SubscribeToNode]),
-			   ct:pal(" Request SubscribeToNodeIq: ~n~n~p~n",[exml:to_binary(SubscribeToNodeIq)]),
-			   escalus:send(Alice, SubscribeToNodeIq),
-			   {true, RecvdStanza} = wait_for_stanza_and_match_iq(Alice, Id, DestinationNode),
-			   is_subscription_for_jid_pred(RecvdStanza, Alice)
-			   %% see example 33
+			   subscribe_by_user(Alice)
+			   %% %% see example 33
 		   end).
 
-%% ---- 
-listen_to_subscribed_node_success(Config) ->
+request_to_subscribe_to_node_success(Config) ->
      escalus:story(Config, [{bob,1}],
 		   fun(Bob) ->
-			   SubscribeToNode = create_subscribe_node_stanza(?DEFAULT_TOPIC_NAME, Bob),
-			   DestinationNode = ?DEST_NODE_ADDR,
-			   Id = <<"bobsub1">>,
-			   SubscribeToNodeIq  =  iq_with_id(set, Id, DestinationNode, Bob,  [SubscribeToNode]),
-			   ct:pal(" Request SubscribeToNodeIq from Bob: ~n~n~p~n",[exml:to_binary(SubscribeToNodeIq)]),
-			   escalus:send(Bob, SubscribeToNodeIq),
-			   %% First - confirm subscription
-			   {true, Res1} = wait_for_stanza_and_match_iq(Bob, Id, DestinationNode), %%wait for subscr. confirmation
-			   %% Second - wait for notification with payload (alice already published)
-			   ResultNotificationStanza = escalus:wait_for_stanza(Bob), %%and wait for the notification
-			   ct:pal(" --- got from server ---- : ~n~n~p~n", [exml:to_binary(ResultNotificationStanza)]),
-			   Res1
-			   
-			   %% see example 101    
+			   subscribe_by_user(Bob)
+			   %% %% see example 101    
 		   end).
+
+subscribe_by_user(User) ->
+    SubscribeToNode = create_subscribe_node_stanza(?DEFAULT_TOPIC_NAME, User),
+    UserName = escalus_utils:get_username(User),
+    DestinationNode = ?DEST_NODE_ADDR,
+    Id = <<UserName/binary,<<"bobsub1">>/binary>>,
+    SubscribeToNodeIq  =  iq_with_id(set, Id, DestinationNode, User,  [SubscribeToNode]),
+    ct:pal(" Request SubscribeToNodeIq from user ~p: ~n~p~n",[UserName, exml:to_binary(SubscribeToNodeIq)]),
+    escalus:send(User, SubscribeToNodeIq),
+    {true, RecvdStanza} = wait_for_stanza_and_match_iq(User, Id, DestinationNode), %%wait for subscr. confirmation
+    ct:pal("Subscriptions received by ~p: ~s~n",[UserName, exml:to_binary(RecvdStanza)]),
+    is_subscription_for_jid_pred(RecvdStanza, User).
 
 
 %% XEP0060---6.5.2 Request all items from node--------------------------------------------------
@@ -285,7 +283,9 @@ request_all_items_from_node_success(Config) ->
     
 
 %% XEP0060---6.2.1 Unubscribe from node request --------------------------------------------
-request_to_unsubscribe_from_node_success(Config) ->
+%% Alice as owner might want to stop subscribing to its own node. This should not failed but does not
+%% make much sence if owner is auto-subscribed or/and where subscribtions are presence based.
+request_to_unsubscribe_from_node_by_owner_success(Config) ->
 
      escalus:story(Config, [1],
 		   fun(Alice) ->
@@ -301,7 +301,9 @@ request_to_unsubscribe_from_node_success(Config) ->
 
 
 %% XEP0060---8.4.1 Delete node request --------------------------------------------
+%% Alice, as Owner requests the deletion of her node.
 request_to_delete_node_success(Config) ->
+    %% dupa , sypie sie
 
      escalus:story(Config, [1], 
 		   fun(Alice) ->
@@ -312,7 +314,28 @@ request_to_delete_node_success(Config) ->
 			   ct:pal(" Request DeleteNodeIq: ~n~n~p~n",[exml:to_binary(DeleteNodeIq)]),
 			   escalus:send(Alice, DeleteNodeIq),
 			   {true, _RecvdStanza} = wait_for_stanza_and_match_iq(Alice, Id, DestinationNode)
+			   %% example 156
 		   end).
+
+
+%% XEP0060---8.8.1 retrieve subscriptions list  --------------------------------------------
+%% Alice, as Owner wants to know what entities subscribed to her node
+request_to_retrieve_subscription_list_by_owner_success(Config) ->
+    %% dupa, sypie sie
+
+     escalus:story(Config, [1], 
+		   fun(Alice) ->
+			   RetrieveSubscriptions = retrieve_subscriptions_stanza(?DEFAULT_TOPIC_NAME),
+			   DestinationNode = ?DEST_NODE_ADDR,
+			   Id = <<"subman1">>,
+			   RetrieveSubscriptionsId  =  iq_with_id(get, Id, DestinationNode, Alice,  [RetrieveSubscriptions]),
+			   ct:pal(" Request RetrieveSubscriptionsId: ~n~n~p~n",[exml:to_binary(RetrieveSubscriptionsId )]),
+			   escalus:send(Alice, RetrieveSubscriptionsId ),
+			   {true, RecvdStanza} = wait_for_stanza_and_match_iq(Alice, Id, DestinationNode),
+			    ct:pal("Subscriptions received: ~s~n",[exml:to_binary(RecvdStanza)])
+			   %% example 183
+		   end).
+
 
 
 %% ----------------------------- HELPER and DIAGNOSTIC functions -----------------------
