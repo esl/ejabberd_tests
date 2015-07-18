@@ -34,9 +34,9 @@ groups() ->
 						request_to_subscribe_to_node_by_owner_success,
 						request_all_items_from_node_success,
 						%%request_to_retract_item_success,
-						%%request_to_retrieve_subscription_list_by_owner_success,
-						request_to_unsubscribe_from_node_by_owner_success
-						%%request_to_delete_node_success
+						request_to_retrieve_subscription_list_by_owner_success,
+						request_to_unsubscribe_from_node_by_owner_success,
+						request_to_delete_node_success
 				     ]}].
 
 
