@@ -15,3 +15,5 @@ pubsub.spec~
 .edts~
 
 tests/exmltests.erl
+
+*.erl~
