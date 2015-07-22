@@ -20,18 +20,19 @@
 	 create_subscribe_node_stanza/2,
 	 create_request_allitems_stanza/1,
 	 create_publish_node_content_stanza/2,
+	 create_publish_node_content_stanza_second/2,
 	 create_specific_node_stanza/1,
 	 create_sub_unsubscribe_from_node_stanza/3,
 	 create_subscribe_node_stanza/2,
 	 entry_body_sample1/0,
-	 entry_body_sample_debice_id/0,
+	 entry_body_sample_device_id/0,
 	 iq_with_id/5,
 	 iq_set_get_rest/3,
 	 publish_item/2,
 	 publish_entry/1,
 	 retract_from_node_stanza/2,
 	 retrieve_subscriptions_stanza/1,
-	 sample_publish_node_with_content/2
+	 publish_node_with_content_stanza/2
 ]).
 
 
@@ -61,11 +62,10 @@ entry_body_sample1() ->
      #xmlel{name = <<"summary">>, children= [ #xmlcdata{content=[<<"To be or not to be...">>]}]}
     ].
 
-entry_body_sample_debice_id() ->
+entry_body_sample_device_id() ->
     [
      #xmlel{name = <<"DEVICE_ID">>, children  = [ #xmlcdata{content=[<<"2F:AB:28:FF">>]}]}
     ].
-
 
 %% provide EntryBody as list of anything compliant with exml entity records.
 publish_entry(EntryBody) ->
@@ -73,7 +73,7 @@ publish_entry(EntryBody) ->
        name = <<"entry">>,
        attrs = [{<<"xmlns">>, <<"http://www.w3.org/2005/Atom">>}],
        children = case EntryBody of 
-		      #xmlel{} -> EntryBody;
+		      [#xmlel{}] -> EntryBody;
 		      _ -> entry_body_sample1()
 		  end
       }.
@@ -90,7 +90,7 @@ publish_item(ItemId, PublishEntry) ->
 		   end
       }.
 
-sample_publish_node_with_content(NodeName, ItemToPublish) ->
+publish_node_with_content_stanza(NodeName, ItemToPublish) ->
     #xmlel{
        name = <<"publish">>,
        attrs = [{<<"node">>, NodeName}],
@@ -105,8 +105,15 @@ sample_publish_node_with_content(NodeName, ItemToPublish) ->
 create_publish_node_content_stanza(NodeName, ItemId) ->
     PublishEntry = publish_entry([]),
     ItemTopublish = publish_item(ItemId, PublishEntry),
-    PublNode = sample_publish_node_with_content(NodeName, ItemTopublish),
+    PublNode = publish_node_with_content_stanza(NodeName, ItemTopublish),
     pubsub_stanza([PublNode], ?NS_PUBSUB).
+
+create_publish_node_content_stanza_second(NodeName, ItemId) ->
+    PublishEntry = publish_entry(entry_body_sample_device_id()),
+    ItemTopublish = publish_item(ItemId, PublishEntry),
+    PublNode = publish_node_with_content_stanza(NodeName, ItemTopublish),
+    pubsub_stanza([PublNode], ?NS_PUBSUB).
+
 
 
 retract_from_node_stanza(NodeName, ItemId) ->
