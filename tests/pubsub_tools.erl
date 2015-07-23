@@ -94,6 +94,7 @@ publish_sample_content(DestinationTopicName, DestinationNode, PublishItemId, Use
     PublishToNode = case SampleNumber of
 	sample_one -> pubsub_helper:create_publish_node_content_stanza(DestinationTopicName, PublishItemId);
 	sample_two -> pubsub_helper:create_publish_node_content_stanza_second(DestinationTopicName, PublishItemId);
+	sample_three -> pubsub_helper:create_publish_node_content_stanza_third(DestinationTopicName, PublishItemId);
 	_ -> pubsub_helper:create_publish_node_content_stanza(DestinationTopicName, PublishItemId)
     end,
     
@@ -103,4 +104,4 @@ publish_sample_content(DestinationTopicName, DestinationNode, PublishItemId, Use
    ct:pal(ReportString, [exml:to_binary(PublishToNodeIq)]),
    io:format(ReportString, [PublishToNodeIq]),
    escalus:send(User, PublishToNodeIq),
-   {true, RecvdStanza} = wait_for_stanza_and_match_result_iq(User, IqId, DestinationNode).
+   {true, _RecvdStanza} = wait_for_stanza_and_match_result_iq(User, IqId, DestinationNode).

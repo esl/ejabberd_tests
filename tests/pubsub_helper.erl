@@ -21,11 +21,10 @@
 	 create_request_allitems_stanza/1,
 	 create_publish_node_content_stanza/2,
 	 create_publish_node_content_stanza_second/2,
-	 create_specific_node_stanza/1,
+	 create_publish_node_content_stanza_third/2,
 	 create_sub_unsubscribe_from_node_stanza/3,
-	 create_subscribe_node_stanza/2,
 	 entry_body_sample1/0,
-	 entry_body_sample_device_id/0,
+	 entry_body_with_sample_device_id/0,
 	 iq_with_id/5,
 	 iq_set_get_rest/3,
 	 publish_item/2,
@@ -55,6 +54,8 @@ iq_set_get_rest(SrcIq, Id, From) ->
     S2 = escalus_stanza:set_id(SrcIq, Id),							
     escalus_stanza:from(S2, escalus_utils:get_jid(From)).
 
+%% ----------------------------- sample entry bodies ------------------------
+
 
 entry_body_sample1() ->
     [
@@ -62,10 +63,20 @@ entry_body_sample1() ->
      #xmlel{name = <<"summary">>, children= [ #xmlcdata{content=[<<"To be or not to be...">>]}]}
     ].
 
-entry_body_sample_device_id() ->
+entry_body_with_sample_device_id() ->
     [
      #xmlel{name = <<"DEVICE_ID">>, children  = [ #xmlcdata{content=[<<"2F:AB:28:FF">>]}]}
     ].
+
+entry_body_with_sample_device_id_2() ->
+    [
+     #xmlel{name = <<"DEVICE_ID">>, children  = [ #xmlcdata{content=[<<"AA:92:1C:92">>]}]}
+    ].
+
+
+
+
+%% ------end-------------------- sample entry bodies ------------------------
 
 %% provide EntryBody as list of anything compliant with exml entity records.
 publish_entry(EntryBody) ->
@@ -102,14 +113,27 @@ publish_node_with_content_stanza(NodeName, ItemToPublish) ->
 		  end
       }.
 
+%% Create full sample content with nested items like in example 88 of XEP-0060
+%% The structure is as follows: pubsub/publish/item/entry/(title,summary)
 create_publish_node_content_stanza(NodeName, ItemId) ->
     PublishEntry = publish_entry([]),
     ItemTopublish = publish_item(ItemId, PublishEntry),
     PublNode = publish_node_with_content_stanza(NodeName, ItemTopublish),
     pubsub_stanza([PublNode], ?NS_PUBSUB).
 
+
+%% Similar to above but with different entry body - mimicking "real" physical 
+%% device with hardware "identifier" - device 1
 create_publish_node_content_stanza_second(NodeName, ItemId) ->
-    PublishEntry = publish_entry(entry_body_sample_device_id()),
+    PublishEntry = publish_entry(entry_body_with_sample_device_id()),
+    ItemTopublish = publish_item(ItemId, PublishEntry),
+    PublNode = publish_node_with_content_stanza(NodeName, ItemTopublish),
+    pubsub_stanza([PublNode], ?NS_PUBSUB).
+
+%% Similar to above but with different entry body - mimicking "real" physical 
+%% device with hardware "identifier" - device 2
+create_publish_node_content_stanza_third(NodeName, ItemId) ->
+    PublishEntry = publish_entry(entry_body_with_sample_device_id_2()),
     ItemTopublish = publish_item(ItemId, PublishEntry),
     PublNode = publish_node_with_content_stanza(NodeName, ItemTopublish),
     pubsub_stanza([PublNode], ?NS_PUBSUB).

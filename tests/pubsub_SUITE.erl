@@ -33,9 +33,10 @@ all() -> [
 groups() ->  [{pubsub_full_cycle_two_users, [sequence], [
 							 request_to_create_node_success,
 							 request_to_publish_to_node_success, 
-							 request_to_subscribe_to_node_success,
+							 %%request_to_subscribe_to_node_success,
 							 request_to_subscribe_to_node_by_owner_success,
-							 request_all_items_from_node_success,
+							 %% request_all_items_from_node_success,
+							 users_get_notified_success,
 							 request_to_retrieve_subscription_list_by_owner_success,
 							 request_to_retract_item_success,
 							 request_to_unsubscribe_from_node_by_owner_success,
@@ -112,6 +113,23 @@ request_to_publish_to_node_success(Config) ->
 										     <<"abc123">>, Alice, sample_one)
 			   %% see example 100
 		   end).
+
+
+users_get_notified_success(Config) ->
+ escalus:story(Config, [{alice,1},{bob,1}],
+		   fun(Alice, Bob) ->
+			   pubsub_tools:subscribe_by_user(Bob, ?DEFAULT_TOPIC_NAME, ?TOPIC_SERVICE_ADDR),
+			   {true, _RecvdStanza} = pubsub_tools:publish_sample_content(?DEFAULT_TOPIC_NAME,
+										     ?TOPIC_SERVICE_ADDR,
+										     <<"xyz123">>, Alice, sample_three),
+
+			   StanzaGot = escalus:wait_for_stanza(Bob),
+			   io:format(" --- bob got stanzas --- ~n~p~n", [StanzaGot])
+
+		   end).
+
+    
+
 
 
 %% XEP0060---7.2.1 Request delete item from node -----------------------------------------
