@@ -18,27 +18,34 @@
 %% Suite configuration
 %%--------------------------------------------------------------------
 
-%% pubsub_full_cycle
-%% case where owner creates a node, publishes to it and gets what he published. It's a round-trip one-user case. 
+%% pubsub_full_cycle_two_users
+%% case where owner creates a node, publishes to it and another user gets what he published.
+%% Then owner deletes the published item and deletes the node.  It's a round-trip two-users case. 
 
 
 
 
-all() ->
-    [{group, pubsub_full_cycle_two_users}].
+all() -> [
+	  {group, pubsub_full_cycle_two_users}
+%%	  {group, testgroup}
+	 ].
 
-groups() ->
-    [{pubsub_full_cycle_two_users, [sequence], [
-						request_to_create_node_success,
-						request_to_publish_to_node_success, 
-						request_to_subscribe_to_node_success,
-						request_to_subscribe_to_node_by_owner_success,
-						request_all_items_from_node_success,
-						request_to_retrieve_subscription_list_by_owner_success,
-						request_to_retract_item_success,
-						request_to_unsubscribe_from_node_by_owner_success,
-						request_to_delete_node_success
-				     ]}].
+groups() ->  [{pubsub_full_cycle_two_users, [sequence], [
+							 request_to_create_node_success,
+							 request_to_publish_to_node_success, 
+							 request_to_subscribe_to_node_success,
+							 request_to_subscribe_to_node_by_owner_success,
+							 request_all_items_from_node_success,
+							 request_to_retrieve_subscription_list_by_owner_success,
+							 request_to_retract_item_success,
+							 request_to_unsubscribe_from_node_by_owner_success,
+							 request_to_delete_node_success
+							]
+	      },
+	      {testgroup, []}
+	     ].
+
+
 
 
 suite() ->
@@ -130,9 +137,7 @@ request_to_retract_item_success(Config) ->
 			   ct:pal(ReportString, [exml:to_binary(RetractFromNodeIq)]),
 			   io:format(ReportString, [RetractFromNodeIq]),
 			   escalus:send(Alice, RetractFromNodeIq),
-			   {true, RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice, IqId2, ?TOPIC_SERVICE_ADDR),
-			   pubsub_tools:is_publish_response_matching_item_id(RecvdItemId, RecvdStanza)
-
+			   {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice, IqId2, ?TOPIC_SERVICE_ADDR)
 			   %% see example 115
 		  end).
 
