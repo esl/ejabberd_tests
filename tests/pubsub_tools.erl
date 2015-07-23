@@ -21,7 +21,10 @@
 	is_publish_response_matching_item_id/2,
 	 publish_sample_content/5,
 	subscribe_by_user/3,
-	unsubscribe_by_user/3]).
+	 subscribe_by_users/3,
+	unsubscribe_by_user/3,
+	unsubscribe_by_users/3,
+	create_node/3]).
 
 %% ----------------------------- HELPER and DIAGNOSTIC functions -----------------------
 %% Note ------ functions in this section are not stanza generating functions but:
@@ -43,6 +46,17 @@ wait_for_stanza_and_match_result_iq(User, Id, DestinationNode) ->
     %%  ct:pal(" result - ~s~n", [exml:to_binary(Result)]),
 
     {Result, ResultStanza}.
+
+create_node(User, DestinationNodeAddr, DestinationNodeName) ->
+   PubSubCreate = pubsub_helper:create_specific_node_stanza(DestinationNodeName),
+   PubSub = pubsub_helper:pubsub_stanza([PubSubCreate], ?NS_PUBSUB),
+   Id = <<"create1">>,
+   PubSubCreateIq  =  pubsub_helper:iq_with_id(set, Id, DestinationNodeAddr, User,  [PubSub]),
+   ct:pal(" Request PubSubCreateIq: ~n~p~n",[exml:to_binary(PubSubCreateIq)]),
+   escalus:send(User, PubSubCreateIq),
+   {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, DestinationNodeAddr).
+   %% example 131
+
 
 %% generate dummy subscription confirmation from server. Used to test predicate function.
 get_subscription_confirmation_stanza(DestinationNode) ->
@@ -79,7 +93,7 @@ subscribe_by_user(User, NodeName, NodeAddress) ->
     is_subscription_for_jid_pred(RecvdStanza, User, NodeName).
 
 subscribe_by_users(UserList, NodeName, NodeAddress) ->
-    todo.
+    lists:map(fun(User) -> subscribe_by_user(User, NodeName, NodeAddress) end, UserList).
 
 unsubscribe_by_user(User, NodeName, NodeAddress) ->
     UnubscribeFromNode = pubsub_helper:create_unsubscribe_from_node_stanza(NodeName, User),
@@ -88,8 +102,9 @@ unsubscribe_by_user(User, NodeName, NodeAddress) ->
     ct:pal(" Request UnSubscribeFromNodeIq: ~n~n~p~n",[exml:to_binary(UnSubscribeFromNodeIq)]),
     escalus:send(User, UnSubscribeFromNodeIq),
     {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, NodeAddress).
-    
-    
+
+unsubscribe_by_users(UserList, NodeName, NodeAddress) ->
+    lists:map(fun(User) -> unsubscribe_by_user(User, NodeName, NodeAddress) end, UserList).
 
 %% returns value of 3rd level node attribute id, see XEP0060 example 100
 get_publish_response_item_id(PublishItemConfirmation) ->

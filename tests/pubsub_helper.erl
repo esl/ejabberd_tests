@@ -65,12 +65,12 @@ entry_body_sample1() ->
 
 entry_body_with_sample_device_id() ->
     [
-     #xmlel{name = <<"DEVICE_ID">>, children  = [ #xmlcdata{content=[<<"2F:AB:28:FF">>]}]}
+     #xmlel{name = <<"DEVICE_ID_SMPL0">>, children  = [ #xmlcdata{content=[<<"2F:AB:28:FF">>]}]}
     ].
 
 entry_body_with_sample_device_id_2() ->
     [
-     #xmlel{name = <<"DEVICE_ID">>, children  = [ #xmlcdata{content=[<<"AA:92:1C:92">>]}]}
+     #xmlel{name = <<"DEVICE_ID_SMPL2">>, children  = [ #xmlcdata{content=[<<"AA:92:1C:92">>]}]}
     ].
 
 

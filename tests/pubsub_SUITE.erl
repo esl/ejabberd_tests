@@ -26,8 +26,8 @@
 
 
 all() -> [
-	  {group, pubsub_full_cycle_two_users}
-%%	  {group, testgroup}
+	  {group, pubsub_full_cycle_two_users},
+	  {group, testgroup}
 	 ].
 
 groups() ->  [{pubsub_full_cycle_two_users, [sequence], [
@@ -43,7 +43,7 @@ groups() ->  [{pubsub_full_cycle_two_users, [sequence], [
 							 request_to_delete_node_success
 							]
 	      },
-	      {testgroup, [multiple_notifications_success]}
+	      {testgroup, [], [multiple_notifications_success]}
 	     ].
 
 
@@ -62,8 +62,14 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
     escalus:end_per_suite(Config).
 
+init_per_group(testgroup, Config) ->
+    escalus:create_users(Config,{by_name, [alice, bob, geralt, carol]});
+
 init_per_group(_GroupName, Config) ->
     escalus:create_users(Config,{by_name, [alice, bob]}).
+
+end_per_group(testgroup, Config) ->
+    escalus:delete_users(Config,{by_name, [alice, bob, geralt, carol]});
 
 end_per_group(_GroupName, Config) ->
     escalus:delete_users(Config,{by_name, [alice, bob]}).
@@ -92,14 +98,15 @@ end_per_testcase(_TestName, Config) ->
 request_to_create_node_success(Config) ->
     escalus:story(Config, [1],
 		   fun(Alice) ->
-			   PubSubCreate = pubsub_helper:create_specific_node_stanza(?DEFAULT_TOPIC_NAME),
-			   PubSub = pubsub_helper:pubsub_stanza([PubSubCreate], ?NS_PUBSUB),
-			   DestinationNode = ?TOPIC_SERVICE_ADDR,
-			   Id = <<"create1">>,
-			   PubSubCreateIq  =  pubsub_helper:iq_with_id(set, Id, DestinationNode, Alice,  [PubSub]),
-			   ct:pal(" Request PubSubCreateIq: ~n~p~n",[exml:to_binary(PubSubCreateIq)]),
-			   escalus:send(Alice, PubSubCreateIq),
-			   {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice, Id, DestinationNode)
+			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?TOPIC_SERVICE_ADDR, ?DEFAULT_TOPIC_NAME)
+			   %% PubSubCreate = pubsub_helper:create_specific_node_stanza(?DEFAULT_TOPIC_NAME),
+			   %% PubSub = pubsub_helper:pubsub_stanza([PubSubCreate], ?NS_PUBSUB),
+			   %% DestinationNode = ?TOPIC_SERVICE_ADDR,
+			   %% Id = <<"create1">>,
+			   %% PubSubCreateIq  =  pubsub_helper:iq_with_id(set, Id, DestinationNode, Alice,  [PubSub]),
+			   %% ct:pal(" Request PubSubCreateIq: ~n~p~n",[exml:to_binary(PubSubCreateIq)]),
+			   %% escalus:send(Alice, PubSubCreateIq),
+			   %% {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice, Id, DestinationNode)
 			   %% example 131
 		   end).
 
@@ -169,9 +176,9 @@ request_to_retract_item_success(Config) ->
 request_to_subscribe_to_node_by_owner_success(Config) ->
      escalus:story(Config, [1],
 		   fun(Alice) ->
-			   pubsub_tools:subscribe_by_user(Alice, ?DEFAULT_TOPIC_NAME, ?TOPIC_SERVICE_ADDR),
+			   pubsub_tools:subscribe_by_user(Alice, ?DEFAULT_TOPIC_NAME, ?TOPIC_SERVICE_ADDR)
 			   %% %% see example 33
-			   {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Alice, ?DEFAULT_TOPIC_NAME,  ?TOPIC_SERVICE_ADDR)
+			   %% {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Alice, ?DEFAULT_TOPIC_NAME,  ?TOPIC_SERVICE_ADDR)
 		   end).
 
 request_to_subscribe_to_node_success(Config) ->
@@ -256,22 +263,41 @@ request_to_retrieve_subscription_list_by_owner_success(Config) ->
 		   end).
 
 
-
-
-
-
 multiple_notifications_success(Config) ->
  escalus:story(Config, [{alice,1},{bob,1},{geralt,1},{carol,1}],
 		   fun(Alice, Bob, Geralt, Carol) ->
-			   pubsub_tools:subscribe_by_user(Bob, ?DEFAULT_TOPIC_NAME, ?TOPIC_SERVICE_ADDR),
-			   {true, _RecvdStanza} = pubsub_tools:publish_sample_content(?DEFAULT_TOPIC_NAME,
+			   TopicName = <<"TABLETS">>,
+			   %% first, let Alice create a new topic
+			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?TOPIC_SERVICE_ADDR, TopicName),
+			   %% subscribe bunch of users...
+			   pubsub_tools:subscribe_by_users([Bob, Geralt, Carol], TopicName, ?TOPIC_SERVICE_ADDR),
+			   %% and publish a dummy message for everyone...			   
+			   {true, _RecvdStanza2} = pubsub_tools:publish_sample_content(TopicName,
 										     ?TOPIC_SERVICE_ADDR,
-										     <<"xyz123">>, Alice, sample_three),
+										     <<"dummyABC">>, Alice, sample_two),
 
-			   StanzaGot = escalus:wait_for_stanza(Bob),
-			   io:format(" --- bob got stanzas --- ~n~p~n", [StanzaGot])
+			   % Let's see who got what:
+
+			   BobStanzaGot = escalus:wait_for_stanza(Bob),
+			   io:format(" --- bob got stanza --- ~n~p~n", [BobStanzaGot]),
+
+			   GeraltStanzaGot = escalus:wait_for_stanza(Geralt),
+			   io:format(" --- geralt got stanza --- ~n~p~n", [GeraltStanzaGot]),
+
+			   CarolStanzaGot = escalus:wait_for_stanza(Carol),
+			   io:format(" --- Carol got stanza --- ~n~p~n", [CarolStanzaGot])
+
+
+			   %%pubsub_tools:unsubscribe_by_users([Bob, Geralt, Carol], TopicName, ?TOPIC_SERVICE_ADDR)
 
 		   end).
+
+
+
+
+
+
+
 
 
 
