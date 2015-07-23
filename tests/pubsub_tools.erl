@@ -20,7 +20,8 @@
 	is_subscription_for_jid_pred/3,
 	is_publish_response_matching_item_id/2,
 	 publish_sample_content/5,
-	subscribe_by_user/3]).
+	subscribe_by_user/3,
+	unsubscribe_by_user/3]).
 
 %% ----------------------------- HELPER and DIAGNOSTIC functions -----------------------
 %% Note ------ functions in this section are not stanza generating functions but:
@@ -76,6 +77,19 @@ subscribe_by_user(User, NodeName, NodeAddress) ->
     {true, RecvdStanza} = wait_for_stanza_and_match_result_iq(User, Id, NodeAddress), %%wait for subscr. confirmation
     ct:pal("Subscriptions received by ~p: ~s~n",[UserName, exml:to_binary(RecvdStanza)]),
     is_subscription_for_jid_pred(RecvdStanza, User, NodeName).
+
+subscribe_by_users(UserList, NodeName, NodeAddress) ->
+    todo.
+
+unsubscribe_by_user(User, NodeName, NodeAddress) ->
+    UnubscribeFromNode = pubsub_helper:create_unsubscribe_from_node_stanza(NodeName, User),
+    Id = <<"unsub1">>,
+    UnSubscribeFromNodeIq  = pubsub_helper:iq_with_id(set, Id, NodeAddress, User,  [UnubscribeFromNode]),
+    ct:pal(" Request UnSubscribeFromNodeIq: ~n~n~p~n",[exml:to_binary(UnSubscribeFromNodeIq)]),
+    escalus:send(User, UnSubscribeFromNodeIq),
+    {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, NodeAddress).
+    
+    
 
 %% returns value of 3rd level node attribute id, see XEP0060 example 100
 get_publish_response_item_id(PublishItemConfirmation) ->
