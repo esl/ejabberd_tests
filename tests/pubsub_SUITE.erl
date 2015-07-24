@@ -91,14 +91,14 @@ end_per_testcase(_TestName, Config) ->
 %% Tests
 %%--------------------------------------------------------------------
 
--define (TOPIC_SERVICE_ADDR, <<"pubsub.localhost">>).
--define (DEFAULT_TOPIC_NAME, <<"princely_musings">>).
+-define (NODE_ADDR, <<"pubsub.localhost">>).
+-define (NODE_NAME, <<"princely_musings">>).
    
 %% XEP0060---8.1.1 Create a node with default configuration ---------------------------
 request_to_create_node_success(Config) ->
     escalus:story(Config, [1],
 		   fun(Alice) ->
-			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?TOPIC_SERVICE_ADDR, ?DEFAULT_TOPIC_NAME)
+			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, ?NODE_NAME)
 			   %% PubSubCreate = pubsub_helper:create_specific_node_stanza(?DEFAULT_TOPIC_NAME),
 			   %% PubSub = pubsub_helper:pubsub_stanza([PubSubCreate], ?NS_PUBSUB),
 			   %% DestinationNode = ?TOPIC_SERVICE_ADDR,
@@ -115,8 +115,8 @@ request_to_create_node_success(Config) ->
 request_to_publish_to_node_success(Config) ->
      escalus:story(Config, [1],
 		   fun(Alice) ->
-			   {true, _RecvdStanza} = pubsub_tools:publish_sample_content(?DEFAULT_TOPIC_NAME,
-										     ?TOPIC_SERVICE_ADDR,
+			   {true, _RecvdStanza} = pubsub_tools:publish_sample_content(?NODE_NAME,
+										     ?NODE_ADDR,
 										     <<"abc123">>, Alice, sample_one)
 			   %% see example 100
 		   end).
@@ -125,17 +125,21 @@ request_to_publish_to_node_success(Config) ->
 users_get_notified_success(Config) ->
  escalus:story(Config, [{alice,1},{bob,1}],
 		   fun(Alice, Bob) ->
-			   pubsub_tools:subscribe_by_user(Bob, ?DEFAULT_TOPIC_NAME, ?TOPIC_SERVICE_ADDR),
-			   {true, _RecvdStanza} = pubsub_tools:publish_sample_content(?DEFAULT_TOPIC_NAME,
-										     ?TOPIC_SERVICE_ADDR,
-										     <<"xyz123">>, Alice, sample_three),
+			   pubsub_tools:subscribe_by_user(Bob, ?NODE_NAME, ?NODE_ADDR),
+			   {true, _RecvdStanza} = pubsub_tools:publish_sample_content(?NODE_NAME,
+										     ?NODE_ADDR,
+										     <<"xyz123">>,
+										      Alice,
+										      sample_three),
 
 			   StanzaGot1 = escalus:wait_for_stanza(Bob),
 			   io:format(" --- bob got stanza1 --- ~n~p~n", [StanzaGot1]),
 
-			   {true, _RecvdStanza2} = pubsub_tools:publish_sample_content(?DEFAULT_TOPIC_NAME,
-										     ?TOPIC_SERVICE_ADDR,
-										     <<"abc123">>, Alice, sample_one),
+			   {true, _RecvdStanza2} = pubsub_tools:publish_sample_content(?NODE_NAME,
+										     ?NODE_ADDR,
+										     <<"abc123">>,
+										       Alice,
+										       sample_one),
 			   StanzaGot2 = escalus:wait_for_stanza(Bob),
 			   io:format(" --- bob got stanza2 --- ~n~p~n", [StanzaGot2])
 
@@ -147,9 +151,11 @@ users_get_notified_success(Config) ->
 request_to_retract_item_success(Config) ->
     escalus:story(Config, [1],
 		  fun(Alice) ->
-			   {true, RecvdStanza1} = pubsub_tools:publish_sample_content(?DEFAULT_TOPIC_NAME,
-										      ?TOPIC_SERVICE_ADDR,
-										      <<"abc123">>, Alice, sample_two),
+			   {true, RecvdStanza1} = pubsub_tools:publish_sample_content(?NODE_NAME,
+										      ?NODE_ADDR,
+										      <<"abc123">>,
+										      Alice,
+										      sample_two),
 
 			  RecvdItemId = pubsub_tools:get_publish_response_item_id(RecvdStanza1),
 			   io:format(" Received ItemId: ~n~p~n",[RecvdItemId]),
@@ -157,14 +163,19 @@ request_to_retract_item_success(Config) ->
 
 			   %% ------retraction test------
 
-			   RetractFromNode = pubsub_helper:retract_from_node_stanza(?DEFAULT_TOPIC_NAME, RecvdItemId),
+			  RetractFromNode = pubsub_helper:retract_from_node_stanza(?NODE_NAME,
+										   RecvdItemId),
 			   IqId2 = <<"retract1">>,
-			   RetractFromNodeIq  =  pubsub_helper:iq_with_id(set, IqId2, ?TOPIC_SERVICE_ADDR, Alice,  [RetractFromNode]),
+			  RetractFromNodeIq  =  pubsub_helper:iq_with_id(set,
+									 IqId2,
+									 ?NODE_ADDR,
+									 Alice,
+									 [RetractFromNode]),
 			   ReportString =  " Request RetractFromNodeIq: ~n~p~n",
 			   ct:pal(ReportString, [exml:to_binary(RetractFromNodeIq)]),
 			   io:format(ReportString, [RetractFromNodeIq]),
 			   escalus:send(Alice, RetractFromNodeIq),
-			   {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice, IqId2, ?TOPIC_SERVICE_ADDR)
+			   {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice, IqId2, ?NODE_ADDR)
 			   %% see example 115
 		  end).
 
@@ -176,7 +187,7 @@ request_to_retract_item_success(Config) ->
 request_to_subscribe_to_node_by_owner_success(Config) ->
      escalus:story(Config, [1],
 		   fun(Alice) ->
-			   pubsub_tools:subscribe_by_user(Alice, ?DEFAULT_TOPIC_NAME, ?TOPIC_SERVICE_ADDR)
+			   pubsub_tools:subscribe_by_user(Alice, ?NODE_NAME, ?NODE_ADDR)
 			   %% %% see example 33
 			   %% {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Alice, ?DEFAULT_TOPIC_NAME,  ?TOPIC_SERVICE_ADDR)
 		   end).
@@ -184,9 +195,9 @@ request_to_subscribe_to_node_by_owner_success(Config) ->
 request_to_subscribe_to_node_success(Config) ->
      escalus:story(Config, [{bob,1}],
 		   fun(Bob) ->
-			   pubsub_tools:subscribe_by_user(Bob, ?DEFAULT_TOPIC_NAME, ?TOPIC_SERVICE_ADDR),
+			   pubsub_tools:subscribe_by_user(Bob, ?NODE_NAME, ?NODE_ADDR),
 			   %% %% see example 101    
-			   {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Bob, ?DEFAULT_TOPIC_NAME,  ?TOPIC_SERVICE_ADDR)
+			   {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Bob, ?NODE_NAME,  ?NODE_ADDR)
 		   end).
 
 
@@ -196,8 +207,8 @@ request_to_subscribe_to_node_success(Config) ->
 request_all_items_from_node_success(Config) ->
      escalus:story(Config, [{bob,1}],
 		   fun(Bob) ->
-			   RequestAllItems = pubsub_helper:create_request_allitems_stanza(?DEFAULT_TOPIC_NAME),
-			   DestinationNode = ?TOPIC_SERVICE_ADDR,
+			   RequestAllItems = pubsub_helper:create_request_allitems_stanza(?NODE_NAME),
+			   DestinationNode = ?NODE_ADDR,
 			   Id = <<"items1">>,
 			   RequestAllItemsIq  =  pubsub_helper:iq_with_id(get, Id, DestinationNode, Bob,  [RequestAllItems]),
 			   ct:pal(" Request all items (Bob): ~n~n~p~n",[exml:to_binary(RequestAllItemsIq)]),
@@ -216,7 +227,7 @@ request_all_items_from_node_success(Config) ->
 request_to_unsubscribe_from_node_by_owner_success(Config) ->
      escalus:story(Config, [1],
 		   fun(Alice) ->
-			   {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Alice, ?DEFAULT_TOPIC_NAME,  ?TOPIC_SERVICE_ADDR)
+			   {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Alice, ?NODE_NAME,  ?NODE_ADDR)
 			   %% UnubscribeFromNode = pubsub_helper:create_unsubscribe_from_node_stanza(?DEFAULT_TOPIC_NAME, Alice),
 			   %% DestinationNode = ?TOPIC_SERVICE_ADDR,
 			   %% Id = <<"unsub1">>,
@@ -233,8 +244,8 @@ request_to_unsubscribe_from_node_by_owner_success(Config) ->
 request_to_delete_node_success(Config) ->
      escalus:story(Config, [1], 
 		   fun(Alice) ->
-			   DeleteNode = pubsub_helper:delete_node_stanza(?DEFAULT_TOPIC_NAME),
-			   DestinationNode = ?TOPIC_SERVICE_ADDR,
+			   DeleteNode = pubsub_helper:delete_node_stanza(?NODE_NAME),
+			   DestinationNode = ?NODE_ADDR,
 			   Id = <<"delete1">>,
 			   DeleteNodeIq  =  pubsub_helper:iq_with_id(set, Id, DestinationNode, Alice,  [DeleteNode]),
 			   ct:pal(" Request DeleteNodeIq: ~n~n~p~n",[exml:to_binary(DeleteNodeIq)]),
@@ -249,8 +260,8 @@ request_to_delete_node_success(Config) ->
 request_to_retrieve_subscription_list_by_owner_success(Config) ->
      escalus:story(Config, [1], 
 		   fun(Alice) ->
-			   RetrieveSubscriptions = pubsub_helper:retrieve_subscriptions_stanza(?DEFAULT_TOPIC_NAME),
-			   DestinationNode = ?TOPIC_SERVICE_ADDR,
+			   RetrieveSubscriptions = pubsub_helper:retrieve_subscriptions_stanza(?NODE_NAME),
+			   DestinationNode = ?NODE_ADDR,
 			   Id = <<"subman1">>,
 			   RetrieveSubscriptionsId = pubsub_helper:iq_with_id(get, Id, DestinationNode, Alice, [RetrieveSubscriptions]),
 			   ct:pal(" Request RetrieveSubscriptionsId: ~n~n~p~n",[exml:to_binary(RetrieveSubscriptionsId )]),
@@ -263,40 +274,60 @@ request_to_retrieve_subscription_list_by_owner_success(Config) ->
 		   end).
 
 
+
+
+
 multiple_notifications_success(Config) ->
  escalus:story(Config, [{alice,1},{bob,1},{geralt,1},{carol,1}],
 		   fun(Alice, Bob, Geralt, Carol) ->
 			   TopicName = <<"TABLETS">>,
 			   %% first, let Alice create a new topic
-			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?TOPIC_SERVICE_ADDR, TopicName),
+			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, TopicName),
 			   %% subscribe bunch of users...
-			   pubsub_tools:subscribe_by_users([Bob, Geralt, Carol], TopicName, ?TOPIC_SERVICE_ADDR),
-			   %% and publish a dummy message for everyone...			   
-			   {true, _RecvdStanza2} = pubsub_tools:publish_sample_content(TopicName,
-										     ?TOPIC_SERVICE_ADDR,
-										     <<"dummyABC">>, Alice, sample_two),
+			   pubsub_tools:subscribe_by_users([Bob, Geralt, Carol], TopicName, ?NODE_ADDR),
 
-			   % Let's see who got what:
-
-			   BobStanzaGot = escalus:wait_for_stanza(Bob),
-			   io:format(" --- bob got stanza --- ~n~p~n", [BobStanzaGot]),
-
-			   GeraltStanzaGot = escalus:wait_for_stanza(Geralt),
-			   io:format(" --- geralt got stanza --- ~n~p~n", [GeraltStanzaGot]),
-
-			   CarolStanzaGot = escalus:wait_for_stanza(Carol),
-			   io:format(" --- Carol got stanza --- ~n~p~n", [CarolStanzaGot])
+			   %% and publish a dummy message ONE for everyone -----------------
+			   {true, PublishedItem1Stanza} = pubsub_tools:publish_sample_content(TopicName,
+										     ?NODE_ADDR,
+										     <<"dummyFIRST">>, Alice, sample_two),
 
 
-			   %%pubsub_tools:unsubscribe_by_users([Bob, Geralt, Carol], TopicName, ?TOPIC_SERVICE_ADDR)
+			   Published_1_ItemId = pubsub_tools:get_publish_response_item_id(PublishedItem1Stanza),
+			   io:format(" Published Item 1 Id was : ~n~p~n",[Published_1_ItemId]),
+
+
+
+
+			   %% and publish a dummy message TWO for everyone ----------------			
+			   {true, PublishedItem2Stanza} = pubsub_tools:publish_sample_content(TopicName,
+										     ?NODE_ADDR,
+										     <<"dummySECOND">>, Alice, sample_three),
+
+
+			   Published_2_ItemId = pubsub_tools:get_publish_response_item_id(PublishedItem2Stanza),
+			   io:format(" Published Item 2 Id was : ~n~p~n",[Published_2_ItemId]),
+
+			   true =  Published_1_ItemId =:= get_notification_item_id_for_user(Bob),
+			   true =  Published_2_ItemId =:= get_notification_item_id_for_user(Bob),
+			   true =  Published_1_ItemId =:= get_notification_item_id_for_user(Geralt),
+			   true =  Published_2_ItemId =:= get_notification_item_id_for_user(Geralt),
+			   true =  Published_1_ItemId =:= get_notification_item_id_for_user(Carol),
+			   true =  Published_2_ItemId =:= get_notification_item_id_for_user(Carol)
+
+			   %% pubsub_tools:unsubscribe_by_users([Bob, Geralt, Carol], TopicName, ?NODE_ADDR)
 
 		   end).
 
 
-
-
-
-
+get_notification_item_id_for_user(User) ->
+    %% UserJid = escalus_utils:get_jid(User),
+    UserStanzaGot = escalus:wait_for_stanza(User),
+    %% io:format(" ------  ~p got stanza ------ ~n~p~n", [UserJid, UserStanzaGot]),
+    ItemListUser = pubsub_tools:get_event_notification_items_list(UserStanzaGot),
+    %% io:format(" and ~p s items in stanza are: ~n~p~n", [UserJid,ItemListUser]),
+    ItemsIdsUser = pubsub_tools:get_items_ids(ItemListUser),
+    io:format("-- received ids: ~n~p~n", [ItemsIdsUser]),
+    hd(ItemsIdsUser).
 
 
 

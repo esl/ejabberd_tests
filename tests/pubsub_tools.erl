@@ -14,17 +14,21 @@
 -include_lib("exml/include/exml.hrl").
 -include_lib("exml/include/exml_stream.hrl").
 
--export([wait_for_stanza_and_match_result_iq/3,
-	get_subscription_confirmation_stanza/1,
-	get_publish_response_item_id/1,
-	is_subscription_for_jid_pred/3,
-	is_publish_response_matching_item_id/2,
+-export([
+	 wait_for_stanza_and_match_result_iq/3,
+	 get_subscription_confirmation_stanza/1,
+	 get_publish_response_item_id/1,
+	 get_event_notification_items_list/1,
+	 get_items_ids/1,
+	 is_subscription_for_jid_pred/3,
+	 is_publish_response_matching_item_id/2,
 	 publish_sample_content/5,
-	subscribe_by_user/3,
+	 subscribe_by_user/3,
 	 subscribe_by_users/3,
-	unsubscribe_by_user/3,
-	unsubscribe_by_users/3,
-	create_node/3]).
+	 unsubscribe_by_user/3,
+	 unsubscribe_by_users/3,
+	 create_node/3
+	]).
 
 %% ----------------------------- HELPER and DIAGNOSTIC functions -----------------------
 %% Note ------ functions in this section are not stanza generating functions but:
@@ -107,7 +111,8 @@ unsubscribe_by_users(UserList, NodeName, NodeAddress) ->
     lists:map(fun(User) -> unsubscribe_by_user(User, NodeName, NodeAddress) end, UserList).
 
 %% returns value of 3rd level node attribute id, see XEP0060 example 100
-get_publish_response_item_id(PublishItemConfirmation) ->
+get_publish_response_item_id(PublishItemConfirmation = #xmlel{name = <<"iq">>}) ->
+    <<"result">> = exml_query:attr(PublishItemConfirmation, <<"type">>),
     L1 = exml_query:subelement(PublishItemConfirmation, <<"pubsub">>),
     L2 = exml_query:subelement(L1, <<"publish">>),
     L3 = exml_query:subelement(L2, <<"item">>),
@@ -134,3 +139,18 @@ publish_sample_content(DestinationTopicName, DestinationNode, PublishItemId, Use
    io:format(ReportString, [PublishToNodeIq]),
    escalus:send(User, PublishToNodeIq),
    {true, _RecvdStanza} = wait_for_stanza_and_match_result_iq(User, IqId, DestinationNode).
+
+
+%% extract the items from the nested wrapper "items" enclosed in message/event
+%% according to example 101 of XEP there comes always only ONE item but we
+%% deal with the lists anyway for consistency. 
+get_event_notification_items_list(EventMessage = #xmlel{name = <<"message">>}) ->
+    Event = exml_query:subelement(EventMessage, <<"event">>),
+    ItemsWrapper = exml_query:subelement(Event, <<"items">>),
+    Items = exml_query:subelements(ItemsWrapper, <<"item">>),
+    Items.
+
+get_items_ids(ItemList) ->
+    lists:map(fun(Item) -> exml_query:attr(Item, <<"id">>) end, ItemList).
+
+
