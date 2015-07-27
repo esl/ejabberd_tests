@@ -66,16 +66,20 @@ init_per_group(testgroup, Config) ->
     escalus:create_users(Config,{by_name, [alice, bob, geralt, carol]});
 
 init_per_group(_GroupName, Config) ->
-    escalus:create_users(Config,{by_name, [alice, bob]}).
+    escalus:create_users(Config,{by_name, [alice, bob, geralt, carol]}).
 
 end_per_group(testgroup, Config) ->
     escalus:delete_users(Config,{by_name, [alice, bob, geralt, carol]});
 
 end_per_group(_GroupName, Config) ->
-    escalus:delete_users(Config,{by_name, [alice, bob]}).
+    escalus:delete_users(Config,{by_name, [alice, bob, geralt, carol]}).
 
 init_per_testcase(request_to_subscribe_to_node_success, Config) ->
     escalus:init_per_testcase(request_to_subscribe_to_node_success, Config);
+
+init_per_testcase(CaseName = request_to_unsubscribe_from_node_by_owner_succes, Config) ->
+    %%Config1 = escalus:create_users(Config,{by_name, [alice, bob, geralt, carol]}),
+    escalus:init_per_testcase(CaseName, Config);
 
 init_per_testcase(_TestName, Config) ->
     escalus:init_per_testcase(_TestName, Config).
@@ -83,13 +87,14 @@ init_per_testcase(_TestName, Config) ->
 end_per_testcase(request_to_subscribe_to_node_success, Config) ->
     escalus:end_per_testcase(request_to_subscribe_to_node_success, Config);
 
+end_per_testcase(CaseName = request_to_unsubscribe_from_node_by_owner_succes, Config) ->
+    %%Config1 = escalus:delete_users(Config,{by_name, [alice, bob, geralt, carol]}),
+    escalus:end_per_testcase(CaseName, Config);
+
 end_per_testcase(_TestName, Config) ->
     escalus:end_per_testcase(_TestName, Config).
 
 
-%%--------------------------------------------------------------------
-%% Tests
-%%--------------------------------------------------------------------
 
 -define (NODE_ADDR, <<"pubsub.localhost">>).
 -define (NODE_NAME, <<"princely_musings">>).
@@ -99,14 +104,6 @@ request_to_create_node_success(Config) ->
     escalus:story(Config, [1],
 		   fun(Alice) ->
 			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, ?NODE_NAME)
-			   %% PubSubCreate = pubsub_helper:create_specific_node_stanza(?DEFAULT_TOPIC_NAME),
-			   %% PubSub = pubsub_helper:pubsub_stanza([PubSubCreate], ?NS_PUBSUB),
-			   %% DestinationNode = ?TOPIC_SERVICE_ADDR,
-			   %% Id = <<"create1">>,
-			   %% PubSubCreateIq  =  pubsub_helper:iq_with_id(set, Id, DestinationNode, Alice,  [PubSub]),
-			   %% ct:pal(" Request PubSubCreateIq: ~n~p~n",[exml:to_binary(PubSubCreateIq)]),
-			   %% escalus:send(Alice, PubSubCreateIq),
-			   %% {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice, Id, DestinationNode)
 			   %% example 131
 		   end).
 
@@ -213,9 +210,8 @@ request_all_items_from_node_success(Config) ->
 			   RequestAllItemsIq  =  pubsub_helper:iq_with_id(get, Id, DestinationNode, Bob,  [RequestAllItems]),
 			   ct:pal(" Request all items (Bob): ~n~n~p~n",[exml:to_binary(RequestAllItemsIq)]),
 			   escalus:send(Bob, RequestAllItemsIq),
-			   {true, Res1} = pubsub_tools:wait_for_stanza_and_match_result_iq(Bob, Id, DestinationNode), %%wait for subscr. confirmation
+			   {true, Res1} = pubsub_tools:wait_for_stanza_and_match_result_iq(Bob, Id, DestinationNode),
        			   ct:pal(" Requested items for Bob: ~n~n~p~n",[exml:to_binary(Res1)])
-			   
 			   %% see example 78
 		   end).
 
@@ -225,18 +221,15 @@ request_all_items_from_node_success(Config) ->
 %% Alice as owner might want to stop subscribing to its own node. This should not failed but does not
 %% make much sence if owner is auto-subscribed or/and where subscribtions are presence based.
 request_to_unsubscribe_from_node_by_owner_success(Config) ->
-     escalus:story(Config, [1],
-		   fun(Alice) ->
-			   {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Alice, ?NODE_NAME,  ?NODE_ADDR)
-			   %% UnubscribeFromNode = pubsub_helper:create_unsubscribe_from_node_stanza(?DEFAULT_TOPIC_NAME, Alice),
-			   %% DestinationNode = ?TOPIC_SERVICE_ADDR,
-			   %% Id = <<"unsub1">>,
-			   %% UnSubscribeFromNodeIq  = pubsub_helper:iq_with_id(set, Id, DestinationNode, Alice,  [UnubscribeFromNode]),
-			   %% ct:pal(" Request UnSubscribeFromNodeIq: ~n~n~p~n",[exml:to_binary(UnSubscribeFromNodeIq)]),
-			   %% escalus:send(Alice, UnSubscribeFromNodeIq),
-			   %% {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice, Id, DestinationNode)
+     escalus:story(Config, [{alice,1},{bob,1},{geralt,1},{carol,1}],
+		   fun(_Alice, Bob, Geralt, Carol) ->
+			   pubsub_tools:subscribe_by_user(Bob, ?NODE_NAME, ?NODE_ADDR),
+			   pubsub_tools:subscribe_by_user(Geralt, ?NODE_NAME, ?NODE_ADDR),
+			   pubsub_tools:subscribe_by_user(Carol, ?NODE_NAME, ?NODE_ADDR),
+			   {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Bob, ?NODE_NAME,  ?NODE_ADDR),
+			   {true, _RecvdStanza2} = pubsub_tools:unsubscribe_by_user(Geralt, ?NODE_NAME,  ?NODE_ADDR),
+			   {true, _RecvdStanza3} = pubsub_tools:unsubscribe_by_user(Carol,  ?NODE_NAME,  ?NODE_ADDR)
 		   end).
-
 
 
 %% XEP0060---8.4.1 Delete node request --------------------------------------------
@@ -258,25 +251,66 @@ request_to_delete_node_success(Config) ->
 %% XEP0060---8.8.1 retrieve subscriptions list  --------------------------------------------
 %% Alice, as Owner wants to know what entities subscribed to her node
 request_to_retrieve_subscription_list_by_owner_success(Config) ->
-     escalus:story(Config, [1], 
-		   fun(Alice) ->
+     escalus:story(Config, [{alice,1},{bob,1}], 
+		   fun(Alice,Bob) ->
+			   pubsub_tools:subscribe_by_user(Alice, ?NODE_NAME, ?NODE_ADDR),
+			   pubsub_tools:subscribe_by_user(Bob, ?NODE_NAME, ?NODE_ADDR),
+			   
 			   RetrieveSubscriptions = pubsub_helper:retrieve_subscriptions_stanza(?NODE_NAME),
 			   DestinationNode = ?NODE_ADDR,
 			   Id = <<"subman1">>,
-			   RetrieveSubscriptionsId = pubsub_helper:iq_with_id(get, Id, DestinationNode, Alice, [RetrieveSubscriptions]),
-			   ct:pal(" Request RetrieveSubscriptionsId: ~n~n~p~n",[exml:to_binary(RetrieveSubscriptionsId )]),
-			   escalus:send(Alice, RetrieveSubscriptionsId ),
+			   GetSubscriptionsId = pubsub_helper:iq_with_id(get, Id, DestinationNode, Alice, [RetrieveSubscriptions]),
+			   ct:pal(" Request RetrieveSubscriptionsId: ~n~n~p~n",[exml:to_binary(GetSubscriptionsId )]),
+			   escalus:send(Alice, GetSubscriptionsId ),
 			   {true, RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice, Id, DestinationNode),
 			   ReportString = "Subscriptions received :",
 			   io:format(ReportString ++ "~n~n~p",[RecvdStanza]),
-  	           	   ct:pal(ReportString ++ "~n~n~s",[exml:to_binary(RecvdStanza)])
+  	           	   ct:pal(ReportString ++ "~n~n~s",[exml:to_binary(RecvdStanza)]),
+
+			   %% get extracted subscription dictionay content for easy access
+			   SubscrListResult = pubsub_tools:get_users_and_subscription_states(RecvdStanza),
+
+			   io:format("===== current config ====== %~p", [Config]),
+
+			   CurrentEscaulsUserList = element(2, lists:nth(5, Config)),
+			   true = check_all_users_in_subscription(SubscrListResult, CurrentEscaulsUserList)
+			       
 			   %% example 183
 		   end).
 
+%% pass dictionary of {Jid, SubscriptionValue} generated from response as in example 183 using function 
+%% get_users_and_subscription_states (pubsub_tools).
+%% Users list to check is taken from current Config - get the current users list from there. 
+check_all_users_in_subscription(SubscriptionListContent, EscalusCurrentUserListToCheck) ->
+    JidListToCheck  = lists:map(
+			fun(Elem) -> escalus_utils:get_jid(element(1,Elem)) end,
+			EscalusCurrentUserListToCheck),
+
+    %% for all tested users find them on response dictionary and find which are
+    %% subscribed and which not
+    Res = lists:map(
+	    fun(Jid) -> 
+		   case  dict:is_key(Jid, SubscriptionListContent) of
+		       true ->
+			   case dict:fetch(Jid, SubscriptionListContent) of
+			       <<"subscribed">> -> {Jid, <<"subscribed">>};
+			       _ -> {Jid, notsubscribed}
+			   end;
+		       false  -> {Jid, nosuchuser}
+		   end
+	    end, JidListToCheck),
+
+    NotSubscribed = lists:filter(
+		      fun(Elem) ->
+			      {_Jid, Val} = Elem,
+			      Val == notsubscribed
+		      end, Res),
+
+    [] =:= NotSubscribed.
 
 
-
-
+%% Alice as topic owner publishes two messages and three users get two notifications with payloads and the
+%% received messages ID are checked if they match the published ones.
 multiple_notifications_success(Config) ->
  escalus:story(Config, [{alice,1},{bob,1},{geralt,1},{carol,1}],
 		   fun(Alice, Bob, Geralt, Carol) ->
@@ -307,19 +341,20 @@ multiple_notifications_success(Config) ->
 			   Published_2_ItemId = pubsub_tools:get_publish_response_item_id(PublishedItem2Stanza),
 			   io:format(" Published Item 2 Id was : ~n~p~n",[Published_2_ItemId]),
 
-			   true =  Published_1_ItemId =:= get_notification_item_id_for_user(Bob),
-			   true =  Published_2_ItemId =:= get_notification_item_id_for_user(Bob),
-			   true =  Published_1_ItemId =:= get_notification_item_id_for_user(Geralt),
-			   true =  Published_2_ItemId =:= get_notification_item_id_for_user(Geralt),
-			   true =  Published_1_ItemId =:= get_notification_item_id_for_user(Carol),
-			   true =  Published_2_ItemId =:= get_notification_item_id_for_user(Carol)
+			   true =  Published_1_ItemId =:= wait_and_get_notification_item_id_for_user(Bob),
+			   true =  Published_2_ItemId =:= wait_and_get_notification_item_id_for_user(Bob),
+			   true =  Published_1_ItemId =:= wait_and_get_notification_item_id_for_user(Geralt),
+			   true =  Published_2_ItemId =:= wait_and_get_notification_item_id_for_user(Geralt),
+			   true =  Published_1_ItemId =:= wait_and_get_notification_item_id_for_user(Carol),
+			   true =  Published_2_ItemId =:= wait_and_get_notification_item_id_for_user(Carol),
 
-			   %% pubsub_tools:unsubscribe_by_users([Bob, Geralt, Carol], TopicName, ?NODE_ADDR)
+			   pubsub_tools:unsubscribe_by_users([Bob, Geralt, Carol], TopicName, ?NODE_ADDR)
 
 		   end).
 
-
-get_notification_item_id_for_user(User) ->
+%% call when notification with message payload is expected. Call many times for many messages to consume
+%% all of them (typical case).
+wait_and_get_notification_item_id_for_user(User) ->
     %% UserJid = escalus_utils:get_jid(User),
     UserStanzaGot = escalus:wait_for_stanza(User),
     %% io:format(" ------  ~p got stanza ------ ~n~p~n", [UserJid, UserStanzaGot]),

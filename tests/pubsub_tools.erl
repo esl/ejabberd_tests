@@ -20,6 +20,7 @@
 	 get_publish_response_item_id/1,
 	 get_event_notification_items_list/1,
 	 get_items_ids/1,
+	 get_users_and_subscription_states/1,
 	 is_subscription_for_jid_pred/3,
 	 is_publish_response_matching_item_id/2,
 	 publish_sample_content/5,
@@ -73,7 +74,34 @@ get_subscription_confirmation_stanza(DestinationNode) ->
    %%B = exml:to_binary(PubSubItemIq),
    %%io:format(" ---- ~n~p~n ", [B]),
    PubSubItemIq.
-	
+
+%% pass subscription list - users and subscription states will be returned as dictionary where
+%% Jid = key , subscriptionState = value}
+get_users_and_subscription_states(SubscriptionList) ->
+    R = exml_query:attr(SubscriptionList, <<"type">>),
+    true = R =:= <<"result">>,
+    R1 = exml_query:subelement(SubscriptionList, <<"pubsub">>),
+    R2 = exml_query:subelement(R1, <<"subscriptions">>),
+    Elems = exml_query:subelements(R2, <<"subscription">>),
+    
+
+    Result = lists:map(fun(Element) -> 
+			       JidFull = exml_query:attr(Element, <<"jid">>),
+			       SubscrState = exml_query:attr(Element, <<"subscription">>),
+			       Jid = hd(binary:split(JidFull, <<"/">>)),
+			       {Jid, SubscrState}
+		       end, Elems),
+    
+    Res = lists:foldl(
+	    fun(Element, NewDict) ->
+		    dict:store(element(1, Element), element(2,Element), NewDict)
+	    end,
+	    dict:new(), 
+	    Result),
+    
+    io:format(" --test dump of users subscriptions: ~n~p ", [dict:to_list(Res)]),
+    Res.
+
 is_subscription_for_jid_pred(SubscrConfirmation, User, _DestinationNode) ->
     %% Stanza = get_subscription_confirmation_stanza(DestinationNode),
     %% R = exml_query:path(Stanza, <<"pubsub>>">>),
@@ -99,6 +127,7 @@ subscribe_by_user(User, NodeName, NodeAddress) ->
 subscribe_by_users(UserList, NodeName, NodeAddress) ->
     lists:map(fun(User) -> subscribe_by_user(User, NodeName, NodeAddress) end, UserList).
 
+%% the user unsubscribes himself
 unsubscribe_by_user(User, NodeName, NodeAddress) ->
     UnubscribeFromNode = pubsub_helper:create_unsubscribe_from_node_stanza(NodeName, User),
     Id = <<"unsub1">>,
