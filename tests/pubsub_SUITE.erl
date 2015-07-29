@@ -23,7 +23,7 @@
 %% if there is no hidden state on server side between the tests.
 
 all() -> [
-	  {group, pubsub_full_cycle},
+	  %%{group, pubsub_full_cycle},
 	  {group, notification_subscription_tests}
 	 ].
 
@@ -42,8 +42,9 @@ groups() ->  [
 						]
 	      },
 	      {notification_subscription_tests, [sequence], [
-							     multiple_notifications_success, 
-							     temporary_subscription_test
+							   %%  multiple_notifications_success, 
+							   %%  temporary_subscription_test,
+							     subscription_change_notification_test
 							    ]}
 	     ].
 
@@ -379,6 +380,45 @@ temporary_subscription_test(Config) ->
 			   error = dict:find(BobsJid, SubscrListResultAfterDrop)
 		   end).
 
+%% 8.8.4 - Notifying Subscribers
+%% according to example 194 if there is change in user's subscription status/mode - he should
+%% be notified by the server about this fact
+%% This case is examined with help of 8.8.3 (no example)
+subscription_change_notification_test(Config) ->
+     escalus:story(Config, [{alice,1},{geralt,1}], 
+		   fun(Alice,Geralt) ->
+			   TopicName = <<"IWILLKICKYOUALL">>,
+  			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, TopicName),
+			   pubsub_tools:subscribe_by_user(Geralt, TopicName, ?NODE_ADDR),
+
+			   {true, _RecvdStanzaBeforeKick} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName,  ?NODE_ADDR),
+
+			   ChangeData = [{escalus_utils:get_short_jid(Geralt), <<"none">>}],
+
+
+			   {Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, TopicName, ?NODE_ADDR, ChangeData)
+
+			   %%UserStanzaGot = escalus:wait_for_stanza(Geralt),			   
+			   %%io:format(" ------  Geralt  got stanza ------ ~n~p~n", [UserStanzaGot]),
+
+
+	
+			   %% SubscrListResultBeforeDrop = pubsub_tools:get_users_and_subscription_states(RecvdStanzaBeforeKick),
+			   %% CurrentEscaulsUserList = element(2, lists:nth(5, Config)),
+			   %% true = check_all_users_in_subscription(SubscrListResultBeforeDrop, CurrentEscaulsUserList),
+
+			   %% escalus:send(Bob, escalus_stanza:presence(<<"unavailable">>)),
+
+			   %% {true, RecvdStanzaAfterDrop} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName, ?NODE_ADDR),
+			   %% SubscrListResultAfterDrop = pubsub_tools:get_users_and_subscription_states(RecvdStanzaAfterDrop),
+
+			   %% BobsJid = escalus_utils:get_jid(Bob),
+			   %% io:format(" BobID to check: ~p",[BobsJid]),
+			   %% %% Bob should not be on subscribe list for this node any more.
+			   %% error = dict:find(BobsJid, SubscrListResultAfterDrop)
+		   end).
+
+%%dupa
 
 %% call when notification with message payload is expected. Call many times for many messages to consume
 %% all of them (typical case).

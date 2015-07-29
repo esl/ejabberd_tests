@@ -25,6 +25,7 @@
 	 create_sub_unsubscribe_from_node_stanza/3,
 	 entry_body_sample1/0,
 	 entry_body_with_sample_device_id/0,
+	 get_subscription_change_list_stanza/1,
 	 iq_with_id/5,
 	 iq_set_get_rest/3,
 	 publish_item/2,
@@ -183,6 +184,26 @@ retrieve_subscriptions_stanza(NodeName) ->
 		      attrs = [{<<"node">>, NodeName}]
 		      },
     pubsub_stanza([RetrieveNode], ?NS_PUBSUB_OWNER).
+
+subscription_stanza({Jid, SubscriptionState}) ->
+    #xmlel{name = <<"subscription">>,
+		      attrs = [{<<"jid">>, Jid},{<<"subscription">>, SubscriptionState}]
+	  }.
+
+%% according to Example 187, 8.8.2.1, XEP-0060
+set_subscriptions_stanza(NodeName, SubscriptionChangesListStanza) ->
+    RetrieveNode = #xmlel{
+		      name = <<"subscriptions">>,
+		      attrs = [{<<"node">>, NodeName}],
+		      children = SubscriptionChangesListStanza
+		      },
+    pubsub_stanza([RetrieveNode], ?NS_PUBSUB_OWNER).
+
+%% pass SubscrChangeData as List of tuples {jid, new_subscription_state}
+get_subscription_change_list_stanza(SubscriptionChangeData) ->
+    lists:map(fun(ChangeEntry) -> subscription_stanza({Jid, SubsState} = ChangeEntry) end, SubscriptionChangeData).
+    
+
 
 
 

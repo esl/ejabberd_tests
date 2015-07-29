@@ -19,12 +19,14 @@
 	 get_subscription_confirmation_stanza/1,
 	 get_publish_response_item_id/1,
 	 get_event_notification_items_list/1,
+	 get_event_notification_subscription_change/1,
 	 get_items_ids/1,
 	 get_users_and_subscription_states/1,
 	 is_subscription_for_jid_pred/3,
 	 get_subscription_list_by_owner/3,
 	 is_publish_response_matching_item_id/2,
 	 publish_sample_content/5,
+	 request_subscription_changes_by_owner/4,
 	 subscribe_by_user/3,
 	 subscribe_by_users/3,
 	 unsubscribe_by_user/3,
@@ -191,7 +193,36 @@ get_event_notification_items_list(EventMessage = #xmlel{name = <<"message">>}) -
     Items = exml_query:subelements(ItemsWrapper, <<"item">>),
     Items.
 
+%% according to example 194 , p 8.8.4
+%% return information about current subscription state for a given user (e.g after
+%% topic owner changed his subscription state.
+get_event_notification_subscription_change(EventMessage = #xmlel{name = <<"message">>}) ->
+    Event = exml_query:subelement(EventMessage, <<"event">>),
+    true =  ?NS_PUBSUB_EVENT =:= exml_query:attr(Event, <<"xmlns">>),
+    Subscription = exml_query:subelement(Event, <<"subscription">>),
+    SubscrNode = exml_query:attr(Subscription, <<"node">>),
+    SubscrJid = exml_query:attr(Subscription, <<"jid">>),
+    SubscrStatus = exml_query:attr(Subscription, <<"subscription">>).
+
+%% returns servers' response stanza, according to 8.8.1.1 (topic owner case!)
+%% pass SubscrChangeData as List of tuples {jid, new_subscription_state}
+request_subscription_changes_by_owner(User, NodeName, NodeAddr, SubscriptionChangeData) ->
+    SubscriptionChangeDataStanza = pubsub_helper:get_subscription_change_list_stanza(SubscriptionChangeData),
+    SetSubscriptionsStanza = pubsub_helper:set_subscriptions_stanza(NodeName, SubscriptionChangeDataStanza),
+    Id = <<"subman2">>,
+    SetSubscriptionsIq = pubsub_helper:iq_with_id(set, Id, NodeAddr, User, [SetSubscriptionsStanza]),
+    io:format(" REQUEST ChangeSubscriptionsByByOwner: ~n~n~p~n",[SetSubscriptionsIq]),
+    escalus:send(User, SetSubscriptionsIq ),
+    wait_for_stanza_and_match_result_iq(User, Id, NodeAddr).
+
 get_items_ids(ItemList) ->
     lists:map(fun(Item) -> exml_query:attr(Item, <<"id">>) end, ItemList).
+
+
+
+
+
+
+
 
 
