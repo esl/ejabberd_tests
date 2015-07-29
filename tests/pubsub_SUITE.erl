@@ -24,23 +24,27 @@
 
 all() -> [
 	  {group, pubsub_full_cycle},
-	  {group, notification_tests}
+	  {group, notification_subscription_tests}
 	 ].
 
-groups() ->  [{pubsub_full_cycle, [sequence], [
-							 request_to_create_node_success,
-							 request_to_publish_to_node_success, 
-							 request_to_subscribe_to_node_success,
-							 request_to_subscribe_to_node_by_owner_success,
-							 request_all_items_from_node_success,
-							 users_get_notified_success,
-							 request_to_retrieve_subscription_list_by_owner_success,
-							 request_to_retract_item_success,
-							 request_to_unsubscribe_from_node_by_owner_success,
-							 request_to_delete_node_success
-							]
+groups() ->  [
+	      {pubsub_full_cycle, [sequence], [
+					       request_to_create_node_success,
+					       request_to_publish_to_node_success, 
+					       request_to_subscribe_to_node_success,
+					       request_to_subscribe_to_node_by_owner_success,
+					       request_all_items_from_node_success,
+					       users_get_notified_success,
+					       request_to_retrieve_subscription_list_by_owner_success,
+					       request_to_retract_item_success,
+					       request_to_unsubscribe_from_node_by_owner_success,
+					       request_to_delete_node_success
+						]
 	      },
-	      {notification_tests, [], [multiple_notifications_success]}
+	      {notification_subscription_tests, [sequence], [
+							     multiple_notifications_success, 
+							     temporary_subscription_test
+							    ]}
 	     ].
 
 suite() ->
@@ -56,13 +60,13 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
     escalus:end_per_suite(Config).
 
-init_per_group(notification_tests, Config) ->
+init_per_group(notification_subscription_tests, Config) ->
     escalus:create_users(Config,{by_name, [alice, bob, geralt, carol]});
 
 init_per_group(_GroupName, Config) ->
     escalus:create_users(Config,{by_name, [alice, bob, geralt, carol]}).
 
-end_per_group(notification_tests, Config) ->
+end_per_group(notification_subscription_tests, Config) ->
     escalus:delete_users(Config,{by_name, [alice, bob, geralt, carol]});
 
 end_per_group(_GroupName, Config) ->
@@ -348,6 +352,33 @@ multiple_notifications_success(Config) ->
 			   true = dict:is_empty(pubsub_tools:get_users_and_subscription_states(RecvdSubscrList2))
 
 		   end).
+
+%% according to 12.4 of XEP-0060 and with assumption this is the DEFAULT setting (no check for configuration entry
+%% for temp. subscription)
+%% 2 users subscribes, 1 goes offline, his subscription should disappear
+temporary_subscription_test(Config) ->
+     escalus:story(Config, [{alice,1},{bob,1},{geralt,1}], 
+		   fun(Alice,Bob,Geralt) ->
+			   TopicName = <<"STRANGENODE">>,
+  			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, TopicName),
+			   pubsub_tools:subscribe_by_users([Bob, Geralt], TopicName, ?NODE_ADDR),
+
+			   {true, RecvdStanzaBeforeDrop} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName,  ?NODE_ADDR),
+			   SubscrListResultBeforeDrop = pubsub_tools:get_users_and_subscription_states(RecvdStanzaBeforeDrop),
+			   CurrentEscaulsUserList = element(2, lists:nth(5, Config)),
+			   true = check_all_users_in_subscription(SubscrListResultBeforeDrop, CurrentEscaulsUserList),
+
+			   escalus:send(Bob, escalus_stanza:presence(<<"unavailable">>)),
+
+			   {true, RecvdStanzaAfterDrop} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName, ?NODE_ADDR),
+			   SubscrListResultAfterDrop = pubsub_tools:get_users_and_subscription_states(RecvdStanzaAfterDrop),
+
+			   BobsJid = escalus_utils:get_jid(Bob),
+			   io:format(" BobID to check: ~p",[BobsJid]),
+			   %% Bob should not be on subscribe list for this node any more.
+			   error = dict:find(BobsJid, SubscrListResultAfterDrop)
+		   end).
+
 
 %% call when notification with message payload is expected. Call many times for many messages to consume
 %% all of them (typical case).
