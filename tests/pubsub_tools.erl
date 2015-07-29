@@ -22,6 +22,7 @@
 	 get_items_ids/1,
 	 get_users_and_subscription_states/1,
 	 is_subscription_for_jid_pred/3,
+	 get_subscription_list_by_owner/3,
 	 is_publish_response_matching_item_id/2,
 	 publish_sample_content/5,
 	 subscribe_by_user/3,
@@ -39,16 +40,13 @@
 %% Checks superficialy is IQ from server  matches the sent id, there is "result" and sender is correct.
 wait_for_stanza_and_match_result_iq(User, Id, DestinationNode) ->
     ResultStanza = escalus:wait_for_stanza(User),
-    ReportString = "Response stanza from server: ~n~n",
+    ReportString = " RESPONSE stanza: ~n~n",
 
     io:format(ReportString ++ "~p~n", [ResultStanza]),
     ct:pal(ReportString ++ "~s~n", [exml:to_binary(ResultStanza)]),
 
     QueryStanza = escalus_stanza:iq_with_type_id_from(<<"result">>, Id, DestinationNode),
-    %%  ct:pal("QueryStanza: ~s~n",[exml:to_binary(QueryStanza)]),
-
     Result = escalus_pred:is_iq_result(QueryStanza, ResultStanza),
-    %%  ct:pal(" result - ~s~n", [exml:to_binary(Result)]),
 
     {Result, ResultStanza}.
 
@@ -57,10 +55,20 @@ create_node(User, DestinationNodeAddr, DestinationNodeName) ->
    PubSub = pubsub_helper:pubsub_stanza([PubSubCreate], ?NS_PUBSUB),
    Id = <<"create1">>,
    PubSubCreateIq  =  pubsub_helper:iq_with_id(set, Id, DestinationNodeAddr, User,  [PubSub]),
-   ct:pal(" Request PubSubCreateIq: ~n~p~n",[exml:to_binary(PubSubCreateIq)]),
+   ct:pal(" REQUEST PubSubCreateIq: ~n~p~n",[exml:to_binary(PubSubCreateIq)]),
    escalus:send(User, PubSubCreateIq),
    {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, DestinationNodeAddr).
    %% example 131
+
+
+%% returns servers' response stanza, according to 8.8.1.1 (owner case)
+get_subscription_list_by_owner(User, NodeName, NodeAddr) ->
+    RetrieveSubscriptions = pubsub_helper:retrieve_subscriptions_stanza(NodeName),
+    Id = <<"subowner">>,
+    GetSubscriptionsIq = pubsub_helper:iq_with_id(get, Id, NodeAddr, User, [RetrieveSubscriptions]),
+    io:format(" REQUEST RetrieveSubscriptionsByByOwner: ~n~n~p~n",[GetSubscriptionsIq]),
+    escalus:send(User, GetSubscriptionsIq ),
+    wait_for_stanza_and_match_result_iq(User, Id, NodeAddr).
 
 
 %% generate dummy subscription confirmation from server. Used to test predicate function.
@@ -75,7 +83,10 @@ get_subscription_confirmation_stanza(DestinationNode) ->
    %%io:format(" ---- ~n~p~n ", [B]),
    PubSubItemIq.
 
-%% pass subscription list - users and subscription states will be returned as dictionary where
+get_users_and_subscription_states([]) ->
+    dict:new();
+
+%% pass subscription list as came from server - users and subscription states will be returned as dictionary where
 %% Jid = key , subscriptionState = value}
 get_users_and_subscription_states(SubscriptionList) ->
     R = exml_query:attr(SubscriptionList, <<"type">>),
@@ -99,8 +110,9 @@ get_users_and_subscription_states(SubscriptionList) ->
 	    dict:new(), 
 	    Result),
     
-    io:format(" --test dump of users subscriptions: ~n~p ", [dict:to_list(Res)]),
+    io:format(" Dump of users subscriptions: ~n~p ", [dict:to_list(Res)]),
     Res.
+
 
 is_subscription_for_jid_pred(SubscrConfirmation, User, _DestinationNode) ->
     %% Stanza = get_subscription_confirmation_stanza(DestinationNode),
@@ -118,10 +130,10 @@ subscribe_by_user(User, NodeName, NodeAddress) ->
     UserName = escalus_utils:get_username(User),
     Id = <<UserName/binary,<<"binsuffix">>/binary>>,
     SubscribeToNodeIq  =  pubsub_helper:iq_with_id(set, Id, NodeAddress, User,  [SubscribeToNode]),
-    ct:pal(" Request SubscribeToNodeIq from user ~p: ~n~p~n",[UserName, exml:to_binary(SubscribeToNodeIq)]),
+    io:format(" REQUEST SubscribeToNodeIq from user ~p: ~n~p~n",[UserName, SubscribeToNodeIq]),
     escalus:send(User, SubscribeToNodeIq),
     {true, RecvdStanza} = wait_for_stanza_and_match_result_iq(User, Id, NodeAddress), %%wait for subscr. confirmation
-    ct:pal("Subscriptions received by ~p: ~s~n",[UserName, exml:to_binary(RecvdStanza)]),
+    io:format(" RESPONSE Subscriptions received by ~p: ~p~n",[UserName, RecvdStanza]),
     is_subscription_for_jid_pred(RecvdStanza, User, NodeName).
 
 subscribe_by_users(UserList, NodeName, NodeAddress) ->
@@ -132,7 +144,7 @@ unsubscribe_by_user(User, NodeName, NodeAddress) ->
     UnubscribeFromNode = pubsub_helper:create_unsubscribe_from_node_stanza(NodeName, User),
     Id = <<"unsub1">>,
     UnSubscribeFromNodeIq  = pubsub_helper:iq_with_id(set, Id, NodeAddress, User,  [UnubscribeFromNode]),
-    ct:pal(" Request UnSubscribeFromNodeIq: ~n~n~p~n",[exml:to_binary(UnSubscribeFromNodeIq)]),
+    ct:pal(" REQUEST UnSubscribeFromNodeIq: ~n~n~p~n",[exml:to_binary(UnSubscribeFromNodeIq)]),
     escalus:send(User, UnSubscribeFromNodeIq),
     {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, NodeAddress).
 
@@ -163,7 +175,7 @@ publish_sample_content(DestinationTopicName, DestinationNode, PublishItemId, Use
     
    IqId = <<"publish1">>,
    PublishToNodeIq  =  pubsub_helper:iq_with_id(set, IqId, DestinationNode, User,  [PublishToNode]),
-   ReportString = " Request PublishToNodeIq: ~n~p~n",
+   ReportString = " REQUEST PublishToNodeIq: ~n~p~n",
    ct:pal(ReportString, [exml:to_binary(PublishToNodeIq)]),
    io:format(ReportString, [PublishToNodeIq]),
    escalus:send(User, PublishToNodeIq),

@@ -18,19 +18,16 @@
 %% Suite configuration
 %%--------------------------------------------------------------------
 
-%% pubsub_full_cycle_two_users
-%% case where owner creates a node, publishes to it and another user gets what he published.
-%% Then owner deletes the published item and deletes the node.  It's a round-trip two-users case. 
-
-
-
+%% pubsub_full_cycle
+%% multiple user scenarios executed in sequence, to check the core pubsub functionality and
+%% if there is no hidden state on server side between the tests.
 
 all() -> [
-	  {group, pubsub_full_cycle_two_users},
-	  {group, testgroup}
+	  {group, pubsub_full_cycle},
+	  {group, notification_tests}
 	 ].
 
-groups() ->  [{pubsub_full_cycle_two_users, [sequence], [
+groups() ->  [{pubsub_full_cycle, [sequence], [
 							 request_to_create_node_success,
 							 request_to_publish_to_node_success, 
 							 request_to_subscribe_to_node_success,
@@ -43,11 +40,8 @@ groups() ->  [{pubsub_full_cycle_two_users, [sequence], [
 							 request_to_delete_node_success
 							]
 	      },
-	      {testgroup, [], [multiple_notifications_success]}
+	      {notification_tests, [], [multiple_notifications_success]}
 	     ].
-
-
-
 
 suite() ->
     escalus:suite().
@@ -62,13 +56,13 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
     escalus:end_per_suite(Config).
 
-init_per_group(testgroup, Config) ->
+init_per_group(notification_tests, Config) ->
     escalus:create_users(Config,{by_name, [alice, bob, geralt, carol]});
 
 init_per_group(_GroupName, Config) ->
     escalus:create_users(Config,{by_name, [alice, bob, geralt, carol]}).
 
-end_per_group(testgroup, Config) ->
+end_per_group(notification_tests, Config) ->
     escalus:delete_users(Config,{by_name, [alice, bob, geralt, carol]});
 
 end_per_group(_GroupName, Config) ->
@@ -251,26 +245,16 @@ request_to_delete_node_success(Config) ->
 %% XEP0060---8.8.1 retrieve subscriptions list  --------------------------------------------
 %% Alice, as Owner wants to know what entities subscribed to her node
 request_to_retrieve_subscription_list_by_owner_success(Config) ->
-     escalus:story(Config, [{alice,1},{bob,1}], 
-		   fun(Alice,Bob) ->
+     escalus:story(Config, [{alice,1},{bob,1},{geralt,1}], 
+		   fun(Alice,Bob,Geralt) ->
 			   pubsub_tools:subscribe_by_user(Alice, ?NODE_NAME, ?NODE_ADDR),
 			   pubsub_tools:subscribe_by_user(Bob, ?NODE_NAME, ?NODE_ADDR),
-			   
-			   RetrieveSubscriptions = pubsub_helper:retrieve_subscriptions_stanza(?NODE_NAME),
-			   DestinationNode = ?NODE_ADDR,
-			   Id = <<"subman1">>,
-			   GetSubscriptionsId = pubsub_helper:iq_with_id(get, Id, DestinationNode, Alice, [RetrieveSubscriptions]),
-			   ct:pal(" Request RetrieveSubscriptionsId: ~n~n~p~n",[exml:to_binary(GetSubscriptionsId )]),
-			   escalus:send(Alice, GetSubscriptionsId ),
-			   {true, RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice, Id, DestinationNode),
-			   ReportString = "Subscriptions received :",
-			   io:format(ReportString ++ "~n~n~p",[RecvdStanza]),
-  	           	   ct:pal(ReportString ++ "~n~n~s",[exml:to_binary(RecvdStanza)]),
+			   pubsub_tools:subscribe_by_user(Geralt, ?NODE_NAME, ?NODE_ADDR),
+
+			   {true, RecvdStanza} = pubsub_tools:get_subscription_list_by_owner(Alice, ?NODE_NAME,  ?NODE_ADDR),
 
 			   %% get extracted subscription dictionay content for easy access
 			   SubscrListResult = pubsub_tools:get_users_and_subscription_states(RecvdStanza),
-
-			   io:format("===== current config ====== %~p", [Config]),
 
 			   CurrentEscaulsUserList = element(2, lists:nth(5, Config)),
 			   true = check_all_users_in_subscription(SubscrListResult, CurrentEscaulsUserList)
@@ -311,6 +295,8 @@ check_all_users_in_subscription(SubscriptionListContent, EscalusCurrentUserListT
 
 %% Alice as topic owner publishes two messages and three users get two notifications with payloads and the
 %% received messages ID are checked if they match the published ones.
+%% next, the subscription list is checked by topic owner and the users unsubsribe explicitely from the
+%% topic. Again, subscription list is checked.
 multiple_notifications_success(Config) ->
  escalus:story(Config, [{alice,1},{bob,1},{geralt,1},{carol,1}],
 		   fun(Alice, Bob, Geralt, Carol) ->
@@ -330,8 +316,6 @@ multiple_notifications_success(Config) ->
 			   io:format(" Published Item 1 Id was : ~n~p~n",[Published_1_ItemId]),
 
 
-
-
 			   %% and publish a dummy message TWO for everyone ----------------			
 			   {true, PublishedItem2Stanza} = pubsub_tools:publish_sample_content(TopicName,
 										     ?NODE_ADDR,
@@ -348,7 +332,20 @@ multiple_notifications_success(Config) ->
 			   true =  Published_1_ItemId =:= wait_and_get_notification_item_id_for_user(Carol),
 			   true =  Published_2_ItemId =:= wait_and_get_notification_item_id_for_user(Carol),
 
-			   pubsub_tools:unsubscribe_by_users([Bob, Geralt, Carol], TopicName, ?NODE_ADDR)
+			   io:format(" -first try- there should be 3 users subscribed to topic"),
+
+			   {true, RecvdSubscrList1} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName, ?NODE_ADDR),
+			   false = dict:is_empty(pubsub_tools:get_users_and_subscription_states(RecvdSubscrList1)),
+
+			   pubsub_tools:unsubscribe_by_users([Bob, Geralt, Carol], TopicName, ?NODE_ADDR),
+
+			   io:format(" -second try- ...now no one is subscribed"),
+
+			   {true, RecvdSubscrList2} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName, ?NODE_ADDR),
+			   %% get extracted subscription dictionary content for easy access
+			   
+			   %% nobody should be subscribed - dictionary is empty.
+			   true = dict:is_empty(pubsub_tools:get_users_and_subscription_states(RecvdSubscrList2))
 
 		   end).
 
