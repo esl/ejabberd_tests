@@ -46,7 +46,8 @@ groups() ->  [
 							     temporary_subscription_test,
 							     subscription_change_test,
 							     subscription_change_notification_test,
-							     subscription_change_notification_test_no_owner
+							     subscription_change_notification_test_no_owner,
+							     subscription_change_no_topic
 							    ]}
 	     ].
 
@@ -448,12 +449,28 @@ subscription_change_notification_test_no_owner(Config) ->
 			   %% Bob, sucker, is trying to spoof and kick out poor Geralt...
 			   {_Result, BobGotStanza} = pubsub_tools:request_subscription_changes_by_owner(Bob, TopicName, ?NODE_ADDR, ChangeData, true),
 
-			   %%BobtGotStanza = escalus:wait_for_stanza(Bob),
-			   io:format(" ------ Bob got stanza ------ ~n~p~n", [BobGotStanza]),
-
 			   {<<"auth">>, <<"forbidden">>} = pubsub_tools:get_error_info(BobGotStanza),
 			   pubsub_tools:delete_node_by_owner(Alice, TopicName, ?NODE_ADDR)
 		   end).
+
+%% Example 191, Node does not exist
+%% Alice forgot to create topic, or used wrong name
+subscription_change_no_topic(Config) ->
+     escalus:story(Config, [{alice,1},{geralt,1},{bob,1}], 
+		   fun(Alice,Geralt,Bob) ->
+			   TopicName = <<"MYNODE">>,
+  			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, TopicName),
+			   pubsub_tools:subscribe_by_user(Geralt, TopicName, ?NODE_ADDR),
+			   pubsub_tools:subscribe_by_user(Bob, TopicName, ?NODE_ADDR),
+			   ChangeData = [{escalus_utils:get_jid(Geralt), <<"none">>}],
+
+			   {_Result, AliceGotStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, <<"MYNODEXXX">>,?NODE_ADDR, ChangeData, false),
+
+			   {<<"cancel">>, <<"item-not-found">>} = pubsub_tools:get_error_info(AliceGotStanza),
+			   pubsub_tools:delete_node_by_owner(Alice, TopicName, ?NODE_ADDR)
+
+		   end).
+
 
 
 %% call when notification with message payload is expected. Call many times for many messages to consume
