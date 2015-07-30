@@ -45,7 +45,8 @@ groups() ->  [
 							     multiple_notifications_success, 
 							     temporary_subscription_test,
 							     subscription_change_test,
-							     subscription_change_notification_test
+							     subscription_change_notification_test,
+							     subscription_change_notification_test_no_owner
 							    ]}
 	     ].
 
@@ -393,7 +394,7 @@ subscription_change_test(Config) ->
 			   ChangeData = [{escalus_utils:get_jid(Geralt), <<"none">>}],
 
 			   %% see 8.8.2.1 or example 187
-			   {_Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, TopicName, ?NODE_ADDR, ChangeData),
+			   {_Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, TopicName, ?NODE_ADDR, ChangeData, false),
 
 			   %% let's check if kicking out Geralt really worked
 			   {true, RecvdStanzaAfterDrop} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName, ?NODE_ADDR),
@@ -422,7 +423,7 @@ subscription_change_notification_test(Config) ->
 			   ChangeData = [{escalus_utils:get_jid(Geralt), <<"none">>}],
 
 			   %% see 8.8.2.1 or example 187
-			   {_Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, TopicName, ?NODE_ADDR, ChangeData),
+			   {_Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, TopicName, ?NODE_ADDR, ChangeData, false),
 
 			   GeraltGotStanza = escalus:wait_for_stanza(Geralt),
 			   io:format(" ------ Geralt got stanza ------ ~n~p~n", [GeraltGotStanza]),
@@ -431,6 +432,27 @@ subscription_change_notification_test(Config) ->
 			   
 			   pubsub_tools:delete_node_by_owner(Alice, TopicName, ?NODE_ADDR)
 
+		   end).
+
+%% Example 190, Entity is not an owner
+subscription_change_notification_test_no_owner(Config) ->
+     escalus:story(Config, [{alice,1},{geralt,1},{bob,1}], 
+		   fun(Alice,Geralt,Bob) ->
+			   TopicName = <<"ANOTHERONE">>,
+  			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, TopicName),
+
+			   pubsub_tools:subscribe_by_user(Geralt, TopicName, ?NODE_ADDR),
+			   pubsub_tools:subscribe_by_user(Bob, TopicName, ?NODE_ADDR),
+			   ChangeData = [{escalus_utils:get_jid(Geralt), <<"none">>}],
+
+			   %% Bob, sucker, is trying to spoof and kick out poor Geralt...
+			   {_Result, BobGotStanza} = pubsub_tools:request_subscription_changes_by_owner(Bob, TopicName, ?NODE_ADDR, ChangeData, true),
+
+			   %%BobtGotStanza = escalus:wait_for_stanza(Bob),
+			   io:format(" ------ Bob got stanza ------ ~n~p~n", [BobGotStanza]),
+
+			   {<<"auth">>, <<"forbidden">>} = pubsub_tools:get_error_info(BobGotStanza),
+			   pubsub_tools:delete_node_by_owner(Alice, TopicName, ?NODE_ADDR)
 		   end).
 
 
