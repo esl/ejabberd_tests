@@ -1,5 +1,5 @@
 %%%===================================================================
-%%% @copyright (C) 2012, Erlang Solutions Ltd.
+%%% @copyright (C) 2015, Erlang Solutions Ltd.
 %%% @doc Suite for testing pubsub features as described in XEP-0060
 %%% @Toolsr module - only pubsub specific tools and high level
 %%% @wrappers for escalus tool.
@@ -15,6 +15,8 @@
 -include_lib("exml/include/exml_stream.hrl").
 
 -export([
+	 create_node/3,
+	 delete_node_by_owner/3,
 	 wait_for_stanza_and_match_result_iq/3,
 	 get_subscription_confirmation_stanza/1,
 	 get_publish_response_item_id/1,
@@ -22,16 +24,15 @@
 	 get_event_notification_subscription_change/1,
 	 get_items_ids/1,
 	 get_users_and_subscription_states/1,
-	 is_subscription_for_jid_pred/3,
 	 get_subscription_list_by_owner/3,
+	 is_subscription_for_jid_pred/3,
 	 is_publish_response_matching_item_id/2,
 	 publish_sample_content/5,
 	 request_subscription_changes_by_owner/4,
 	 subscribe_by_user/3,
 	 subscribe_by_users/3,
 	 unsubscribe_by_user/3,
-	 unsubscribe_by_users/3,
-	 create_node/3
+	 unsubscribe_by_users/3
 	]).
 
 %% ----------------------------- HELPER and DIAGNOSTIC functions -----------------------
@@ -196,13 +197,15 @@ get_event_notification_items_list(EventMessage = #xmlel{name = <<"message">>}) -
 %% according to example 194 , p 8.8.4
 %% return information about current subscription state for a given user (e.g after
 %% topic owner changed his subscription state.
+%% information is returned as tuple (NodeName, SubscriptionStatus)
 get_event_notification_subscription_change(EventMessage = #xmlel{name = <<"message">>}) ->
     Event = exml_query:subelement(EventMessage, <<"event">>),
     true =  ?NS_PUBSUB_EVENT =:= exml_query:attr(Event, <<"xmlns">>),
     Subscription = exml_query:subelement(Event, <<"subscription">>),
     SubscrNode = exml_query:attr(Subscription, <<"node">>),
     SubscrJid = exml_query:attr(Subscription, <<"jid">>),
-    SubscrStatus = exml_query:attr(Subscription, <<"subscription">>).
+    SubscrStatus = exml_query:attr(Subscription, <<"subscription">>),
+    {SubscrNode, SubscrStatus}.
 
 %% returns servers' response stanza, according to 8.8.1.1 (topic owner case!)
 %% pass SubscrChangeData as List of tuples {jid, new_subscription_state}
@@ -217,6 +220,15 @@ request_subscription_changes_by_owner(User, NodeName, NodeAddr, SubscriptionChan
 
 get_items_ids(ItemList) ->
     lists:map(fun(Item) -> exml_query:attr(Item, <<"id">>) end, ItemList).
+
+delete_node_by_owner(User, NodeName, NodeAddr) ->
+    DeleteNode = pubsub_helper:delete_node_stanza(NodeName),
+    Id = <<"delete1">>,
+    DeleteNodeIq  =  pubsub_helper:iq_with_id(set, Id, NodeAddr, User,  [DeleteNode]),
+    io:format(" REQUEST DeleteNodeIq: ~n~n~p~n",[DeleteNodeIq]),
+    escalus:send(User, DeleteNodeIq),
+    {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, NodeAddr).
+
 
 
 

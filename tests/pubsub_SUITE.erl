@@ -44,6 +44,7 @@ groups() ->  [
 	      {notification_subscription_tests, [sequence], [
 							     multiple_notifications_success, 
 							     temporary_subscription_test,
+							     subscription_change_test,
 							     subscription_change_notification_test
 							    ]}
 	     ].
@@ -192,7 +193,7 @@ request_to_subscribe_to_node_success(Config) ->
      escalus:story(Config, [{bob,1}],
 		   fun(Bob) ->
 			   pubsub_tools:subscribe_by_user(Bob, ?NODE_NAME, ?NODE_ADDR),
-			   %% %% see example 101    
+			   %% %% see example 33
 			   {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Bob, ?NODE_NAME,  ?NODE_ADDR)
 		   end).
 
@@ -236,13 +237,7 @@ request_to_unsubscribe_from_node_by_owner_success(Config) ->
 request_to_delete_node_success(Config) ->
      escalus:story(Config, [1], 
 		   fun(Alice) ->
-			   DeleteNode = pubsub_helper:delete_node_stanza(?NODE_NAME),
-			   DestinationNode = ?NODE_ADDR,
-			   Id = <<"delete1">>,
-			   DeleteNodeIq  =  pubsub_helper:iq_with_id(set, Id, DestinationNode, Alice,  [DeleteNode]),
-			   ct:pal(" Request DeleteNodeIq: ~n~n~p~n",[exml:to_binary(DeleteNodeIq)]),
-			   escalus:send(Alice, DeleteNodeIq),
-			   {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice, Id, DestinationNode)
+			   pubsub_tools:delete_node_by_owner(Alice, ?NODE_NAME, ?NODE_ADDR)
 			   %% example 156
 		   end).
 
@@ -306,8 +301,8 @@ multiple_notifications_success(Config) ->
  escalus:story(Config, [{alice,1},{bob,1},{geralt,1},{carol,1}],
 		   fun(Alice, Bob, Geralt, Carol) ->
 			   TopicName = <<"TABLETS">>,
-			   %% first, let Alice create a new topic
 			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, TopicName),
+
 			   %% subscribe bunch of users...
 			   pubsub_tools:subscribe_by_users([Bob, Geralt, Carol], TopicName, ?NODE_ADDR),
 
@@ -350,7 +345,9 @@ multiple_notifications_success(Config) ->
 			   %% get extracted subscription dictionary content for easy access
 			   
 			   %% nobody should be subscribed - dictionary is empty.
-			   true = dict:is_empty(pubsub_tools:get_users_and_subscription_states(RecvdSubscrList2))
+			   true = dict:is_empty(pubsub_tools:get_users_and_subscription_states(RecvdSubscrList2)),
+
+			   pubsub_tools:delete_node_by_owner(Alice, TopicName, ?NODE_ADDR)
 
 		   end).
 
@@ -377,10 +374,39 @@ temporary_subscription_test(Config) ->
 			   BobsJid = escalus_utils:get_jid(Bob),
 			   io:format(" BobID to check: ~p",[BobsJid]),
 			   %% Bob should not be on subscribe list for this node any more.
-			   error = dict:find(BobsJid, SubscrListResultAfterDrop)
+			   error = dict:find(BobsJid, SubscrListResultAfterDrop),
+
+			   pubsub_tools:delete_node_by_owner(Alice, TopicName, ?NODE_ADDR)
 		   end).
 
-%% 8.8.4 - Notifying Subscribers
+%% 8.8.2 - Modify subscriptions
+%% 8.8.2.1 Request, example 187
+subscription_change_test(Config) ->
+     escalus:story(Config, [{alice,1},{geralt,1}], 
+		   fun(Alice,Geralt) ->
+			   TopicName = <<"IWILLKICKYOUALL">>,
+  			   {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, TopicName),
+			   pubsub_tools:subscribe_by_user(Geralt, TopicName, ?NODE_ADDR),
+
+			   {true, _RecvdStanzaBeforeKick} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName,  ?NODE_ADDR),
+
+			   ChangeData = [{escalus_utils:get_jid(Geralt), <<"none">>}],
+
+			   %% see 8.8.2.1 or example 187
+			   {_Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, TopicName, ?NODE_ADDR, ChangeData),
+
+			   %% let's check if kicking out Geralt really worked
+			   {true, RecvdStanzaAfterDrop} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName, ?NODE_ADDR),
+			   SubscrListResultAfterDrop = pubsub_tools:get_users_and_subscription_states(RecvdStanzaAfterDrop),
+
+			   GeraltsJid = escalus_utils:get_jid(Geralt),
+			   error = dict:find(GeraltsJid, SubscrListResultAfterDrop),
+
+			   pubsub_tools:delete_node_by_owner(Alice, TopicName, ?NODE_ADDR)
+		   end).
+
+
+%% 8.8.4 - Notifying Subscribers, 
 %% according to example 194 if there is change in user's subscription status/mode - he should
 %% be notified by the server about this fact
 %% This case is examined with help of 8.8.3 (no example)
@@ -393,32 +419,20 @@ subscription_change_notification_test(Config) ->
 
 			   {true, _RecvdStanzaBeforeKick} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName,  ?NODE_ADDR),
 
-			   ChangeData = [{escalus_utils:get_short_jid(Geralt), <<"none">>}],
+			   ChangeData = [{escalus_utils:get_jid(Geralt), <<"none">>}],
 
+			   %% see 8.8.2.1 or example 187
+			   {_Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, TopicName, ?NODE_ADDR, ChangeData),
 
-			   {_Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, TopicName, ?NODE_ADDR, ChangeData)
+			   GeraltGotStanza = escalus:wait_for_stanza(Geralt),
+			   io:format(" ------ Geralt got stanza ------ ~n~p~n", [GeraltGotStanza]),
 
-			   %%UserStanzaGot = escalus:wait_for_stanza(Geralt),			   
-			   %%io:format(" ------  Geralt  got stanza ------ ~n~p~n", [UserStanzaGot]),
+			   {TopicName, <<"none">>} = pubsub_tools:get_event_notification_subscription_change(GeraltGotStanza),
+			   
+			   pubsub_tools:delete_node_by_owner(Alice, TopicName, ?NODE_ADDR)
 
-
-	
-			   %% SubscrListResultBeforeDrop = pubsub_tools:get_users_and_subscription_states(RecvdStanzaBeforeKick),
-			   %% CurrentEscaulsUserList = element(2, lists:nth(5, Config)),
-			   %% true = check_all_users_in_subscription(SubscrListResultBeforeDrop, CurrentEscaulsUserList),
-
-			   %% escalus:send(Bob, escalus_stanza:presence(<<"unavailable">>)),
-
-			   %% {true, RecvdStanzaAfterDrop} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName, ?NODE_ADDR),
-			   %% SubscrListResultAfterDrop = pubsub_tools:get_users_and_subscription_states(RecvdStanzaAfterDrop),
-
-			   %% BobsJid = escalus_utils:get_jid(Bob),
-			   %% io:format(" BobID to check: ~p",[BobsJid]),
-			   %% %% Bob should not be on subscribe list for this node any more.
-			   %% error = dict:find(BobsJid, SubscrListResultAfterDrop)
 		   end).
 
-%%dupa
 
 %% call when notification with message payload is expected. Call many times for many messages to consume
 %% all of them (typical case).
