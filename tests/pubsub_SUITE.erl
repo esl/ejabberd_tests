@@ -23,7 +23,7 @@
 %% if there is no hidden state on server side between the tests.
 
 all() -> [
-	  %%{group, pubsub_full_cycle},
+	  {group, pubsub_full_cycle},
 	  {group, notification_subscription_tests}
 	 ].
 
@@ -42,8 +42,8 @@ groups() ->  [
 						]
 	      },
 	      {notification_subscription_tests, [sequence], [
-							   %%  multiple_notifications_success, 
-							   %%  temporary_subscription_test,
+							     multiple_notifications_success, 
+							     temporary_subscription_test,
 							     subscription_change_notification_test
 							    ]}
 	     ].
@@ -183,9 +183,9 @@ request_to_retract_item_success(Config) ->
 request_to_subscribe_to_node_by_owner_success(Config) ->
      escalus:story(Config, [1],
 		   fun(Alice) ->
-			   pubsub_tools:subscribe_by_user(Alice, ?NODE_NAME, ?NODE_ADDR)
+			   pubsub_tools:subscribe_by_user(Alice, ?NODE_NAME, ?NODE_ADDR),
 			   %% %% see example 33
-			   %% {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Alice, ?DEFAULT_TOPIC_NAME,  ?TOPIC_SERVICE_ADDR)
+			   {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Alice, ?NODE_NAME,  ?NODE_ADDR)
 		   end).
 
 request_to_subscribe_to_node_success(Config) ->
@@ -252,7 +252,7 @@ request_to_delete_node_success(Config) ->
 request_to_retrieve_subscription_list_by_owner_success(Config) ->
      escalus:story(Config, [{alice,1},{bob,1},{geralt,1}], 
 		   fun(Alice,Bob,Geralt) ->
-			   pubsub_tools:subscribe_by_user(Alice, ?NODE_NAME, ?NODE_ADDR),
+			   %% pubsub_tools:subscribe_by_user(Alice, ?NODE_NAME, ?NODE_ADDR),
 			   pubsub_tools:subscribe_by_user(Bob, ?NODE_NAME, ?NODE_ADDR),
 			   pubsub_tools:subscribe_by_user(Geralt, ?NODE_NAME, ?NODE_ADDR),
 
@@ -396,7 +396,7 @@ subscription_change_notification_test(Config) ->
 			   ChangeData = [{escalus_utils:get_short_jid(Geralt), <<"none">>}],
 
 
-			   {Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, TopicName, ?NODE_ADDR, ChangeData)
+			   {_Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, TopicName, ?NODE_ADDR, ChangeData)
 
 			   %%UserStanzaGot = escalus:wait_for_stanza(Geralt),			   
 			   %%io:format(" ------  Geralt  got stanza ------ ~n~p~n", [UserStanzaGot]),
