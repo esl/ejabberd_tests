@@ -26,7 +26,7 @@ all() -> [
 groups() ->  [
               {pubsub_full_cycle_tests, [sequence], [
                                                      request_to_create_node_success,
-                                                     request_to_publish_to_node_success, 
+                                                     request_to_publish_to_node_success,
                                                      request_to_subscribe_to_node_success,
                                                      request_to_subscribe_to_node_by_owner_success,
                                                      request_all_items_from_node_success,
@@ -38,7 +38,7 @@ groups() ->  [
                                                     ]
               },
               {notification_subscription_tests, [sequence], [
-                                                             multiple_notifications_success, 
+                                                             multiple_notifications_success,
                                                              temporary_subscription_test,
                                                              subscription_change_test,
                                                              subscription_change_notification_test,
@@ -100,7 +100,9 @@ end_per_testcase(_TestName, Config) ->
 request_to_create_node_success(Config) ->
     escalus:story(Config, [1],
                   fun(Alice) ->
-                          {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, ?NODE_NAME)
+                          {true, _RecvdStanza} = pubsub_tools:create_node(Alice,
+                                                                          ?NODE_ADDR,
+                                                                          ?NODE_NAME)
                           %% example 131
                   end).
 
@@ -111,7 +113,9 @@ request_to_publish_to_node_success(Config) ->
                   fun(Alice) ->
                           {true, _RecvdStanza} = pubsub_tools:publish_sample_content(?NODE_NAME,
                                                                                      ?NODE_ADDR,
-                                                                                     <<"abc123">>, Alice, sample_one)
+                                                                                     <<"abc123">>,
+                                                                                     Alice,
+                                                                                     sample_one)
                           %% see example 100
                   end).
 
@@ -169,7 +173,9 @@ request_to_retract_item_success(Config) ->
                           ct:pal(ReportString, [exml:to_binary(RetractFromNodeIq)]),
                           io:format(ReportString, [RetractFromNodeIq]),
                           escalus:send(Alice, RetractFromNodeIq),
-                          {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice, IqId2, ?NODE_ADDR)
+                          {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(Alice,
+                                                                                                  IqId2,
+                                                                                                  ?NODE_ADDR)
                           %% see example 115
                   end).
 
@@ -183,7 +189,7 @@ request_to_subscribe_to_node_by_owner_success(Config) ->
                   fun(Alice) ->
                           pubsub_tools:subscribe_by_user(Alice, ?NODE_NAME, ?NODE_ADDR),
                           %% %% see example 33
-                          {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Alice, ?NODE_NAME,  ?NODE_ADDR)
+                          {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Alice, ?NODE_NAME, ?NODE_ADDR)
                   end).
 
 request_to_subscribe_to_node_success(Config) ->
@@ -191,7 +197,7 @@ request_to_subscribe_to_node_success(Config) ->
                   fun(Bob) ->
                           pubsub_tools:subscribe_by_user(Bob, ?NODE_NAME, ?NODE_ADDR),
                           %% %% see example 33
-                          {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Bob, ?NODE_NAME,  ?NODE_ADDR)
+                          {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Bob, ?NODE_NAME, ?NODE_ADDR)
                   end).
 
 
@@ -204,7 +210,11 @@ request_all_items_from_node_success(Config) ->
                           RequestAllItems = escalus_pubsub_stanza:create_request_allitems_stanza(?NODE_NAME),
                           DestinationNode = ?NODE_ADDR,
                           Id = <<"items1">>,
-                          RequestAllItemsIq  =  escalus_pubsub_stanza:iq_with_id(get, Id, DestinationNode, Bob,  [RequestAllItems]),
+                          RequestAllItemsIq  =  escalus_pubsub_stanza:iq_with_id(get,
+                                                                                 Id,
+                                                                                 DestinationNode,
+                                                                                 Bob,
+                                                                                 [RequestAllItems]),
                           ct:pal(" Request all items (Bob): ~n~n~p~n",[exml:to_binary(RequestAllItemsIq)]),
                           escalus:send(Bob, RequestAllItemsIq),
                           {true, Res1} = pubsub_tools:wait_for_stanza_and_match_result_iq(Bob, Id, DestinationNode),
@@ -223,9 +233,9 @@ request_to_unsubscribe_from_node_by_owner_success(Config) ->
                           pubsub_tools:subscribe_by_user(Bob, ?NODE_NAME, ?NODE_ADDR),
                           pubsub_tools:subscribe_by_user(Geralt, ?NODE_NAME, ?NODE_ADDR),
                           pubsub_tools:subscribe_by_user(Carol, ?NODE_NAME, ?NODE_ADDR),
-                          {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Bob, ?NODE_NAME,  ?NODE_ADDR),
-                          {true, _RecvdStanza2} = pubsub_tools:unsubscribe_by_user(Geralt, ?NODE_NAME,  ?NODE_ADDR),
-                          {true, _RecvdStanza3} = pubsub_tools:unsubscribe_by_user(Carol,  ?NODE_NAME,  ?NODE_ADDR)
+                          {true, _RecvdStanza} = pubsub_tools:unsubscribe_by_user(Bob, ?NODE_NAME, ?NODE_ADDR),
+                          {true, _RecvdStanza2} = pubsub_tools:unsubscribe_by_user(Geralt, ?NODE_NAME, ?NODE_ADDR),
+                          {true, _RecvdStanza3} = pubsub_tools:unsubscribe_by_user(Carol,  ?NODE_NAME, ?NODE_ADDR)
                   end).
 
 
@@ -248,7 +258,9 @@ request_to_retrieve_subscription_list_by_owner_success(Config) ->
                           pubsub_tools:subscribe_by_user(Bob, ?NODE_NAME, ?NODE_ADDR),
                           pubsub_tools:subscribe_by_user(Geralt, ?NODE_NAME, ?NODE_ADDR),
 
-                          {true, RecvdStanza} = pubsub_tools:get_subscription_list_by_owner(Alice, ?NODE_NAME,  ?NODE_ADDR),
+                          {true, RecvdStanza} = pubsub_tools:get_subscription_list_by_owner(Alice,
+                                                                                            ?NODE_NAME,
+                                                                                            ?NODE_ADDR),
 
                           %% get extracted subscription dictionay content for easy access
                           SubscrListResult = pubsub_tools:get_users_and_subscription_states(RecvdStanza),
@@ -259,9 +271,9 @@ request_to_retrieve_subscription_list_by_owner_success(Config) ->
                           %% example 183
                   end).
 
-%% pass dictionary of {Jid, SubscriptionValue} generated from response as in example 183 using function 
+%% pass dictionary of {Jid, SubscriptionValue} generated from response as in example 183 using function
 %% get_users_and_subscription_states (pubsub_tools).
-%% Users list to check is taken from current Config - get the current users list from there. 
+%% Users list to check is taken from current Config - get the current users list from there.
 check_all_users_in_subscription(SubscriptionListContent, EscalusCurrentUserListToCheck) ->
     JidListToCheck  = lists:map(
                         fun(Elem) -> escalus_utils:get_jid(element(1,Elem)) end,
@@ -306,17 +318,21 @@ multiple_notifications_success(Config) ->
                           %% and publish a dummy message ONE for everyone -----------------
                           {true, PublishedItem1Stanza} = pubsub_tools:publish_sample_content(TopicName,
                                                                                              ?NODE_ADDR,
-                                                                                             <<"dummyFIRST">>, Alice, sample_two),
+                                                                                             <<"dummyFIRST">>,
+                                                                                             Alice,
+                                                                                             sample_two),
 
 
                           Published_1_ItemId = pubsub_tools:get_publish_response_item_id(PublishedItem1Stanza),
                           io:format(" Published Item 1 Id was : ~n~p~n",[Published_1_ItemId]),
 
 
-                          %% and publish a dummy message TWO for everyone ----------------			
+                          %% and publish a dummy message TWO for everyone ----------------
                           {true, PublishedItem2Stanza} = pubsub_tools:publish_sample_content(TopicName,
                                                                                              ?NODE_ADDR,
-                                                                                             <<"dummySECOND">>, Alice, sample_three),
+                                                                                             <<"dummySECOND">>,
+                                                                                             Alice,
+                                                                                             sample_three),
 
 
                           Published_2_ItemId = pubsub_tools:get_publish_response_item_id(PublishedItem2Stanza),
@@ -331,14 +347,18 @@ multiple_notifications_success(Config) ->
 
                           io:format(" -first try- there should be 3 users subscribed to topic"),
 
-                          {true, RecvdSubscrList1} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName, ?NODE_ADDR),
+                          {true, RecvdSubscrList1} = pubsub_tools:get_subscription_list_by_owner(Alice,
+                                                                                                 TopicName,
+                                                                                                 ?NODE_ADDR),
                           false = dict:is_empty(pubsub_tools:get_users_and_subscription_states(RecvdSubscrList1)),
 
                           pubsub_tools:unsubscribe_by_users([Bob, Geralt, Carol], TopicName, ?NODE_ADDR),
 
                           io:format(" -second try- ...now no one is subscribed"),
 
-                          {true, RecvdSubscrList2} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName, ?NODE_ADDR),
+                          {true, RecvdSubscrList2} = pubsub_tools:get_subscription_list_by_owner(Alice,
+                                                                                                 TopicName,
+                                                                                                 ?NODE_ADDR),
                           %% get extracted subscription dictionary content for easy access
 
                           %% nobody should be subscribed - dictionary is empty.
@@ -358,15 +378,22 @@ temporary_subscription_test(Config) ->
                           {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, TopicName),
                           pubsub_tools:subscribe_by_users([Bob, Geralt], TopicName, ?NODE_ADDR),
 
-                          {true, RecvdStanzaBeforeDrop} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName,  ?NODE_ADDR),
-                          SubscrListResultBeforeDrop = pubsub_tools:get_users_and_subscription_states(RecvdStanzaBeforeDrop),
+                          {true, RecvdStanzaBeforeDrop} = pubsub_tools:get_subscription_list_by_owner(Alice,
+                                                                                                      TopicName,
+                                                                                                      ?NODE_ADDR),
+                          SubscrListResultBeforeDrop = pubsub_tools:get_users_and_subscription_states(
+                                                         RecvdStanzaBeforeDrop),
                           CurrentEscaulsUserList = element(2, lists:nth(5, Config)),
                           true = check_all_users_in_subscription(SubscrListResultBeforeDrop, CurrentEscaulsUserList),
 
                           escalus:send(Bob, escalus_stanza:presence(<<"unavailable">>)),
 
-                          {true, RecvdStanzaAfterDrop} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName, ?NODE_ADDR),
-                          SubscrListResultAfterDrop = pubsub_tools:get_users_and_subscription_states(RecvdStanzaAfterDrop),
+                          {true, RecvdStanzaAfterDrop} = pubsub_tools:get_subscription_list_by_owner(
+                                                           Alice,
+                                                           TopicName,
+                                                           ?NODE_ADDR),
+                          SubscrListResultAfterDrop = pubsub_tools:get_users_and_subscription_states(
+                                                        RecvdStanzaAfterDrop),
 
                           BobsJid = escalus_utils:get_jid(Bob),
                           io:format(" BobID to check: ~p",[BobsJid]),
@@ -385,16 +412,26 @@ subscription_change_test(Config) ->
                           {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, TopicName),
                           pubsub_tools:subscribe_by_user(Geralt, TopicName, ?NODE_ADDR),
 
-                          {true, _RecvdStanzaBeforeKick} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName,  ?NODE_ADDR),
+                          {true, _RecvdStanzaBeforeKick} = pubsub_tools:get_subscription_list_by_owner(Alice,
+                                                                                                       TopicName,
+                                                                                                       ?NODE_ADDR),
 
                           ChangeData = [{escalus_utils:get_jid(Geralt), <<"none">>}],
 
                           %% see 8.8.2.1 or example 187
-                          {_Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, TopicName, ?NODE_ADDR, ChangeData, false),
+                          {_Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice,
+                                                                                                        TopicName,
+                                                                                                        ?NODE_ADDR,
+                                                                                                        ChangeData,
+                                                                                                        false),
 
                           %% let's check if kicking out Geralt really worked
-                          {true, RecvdStanzaAfterDrop} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName, ?NODE_ADDR),
-                          SubscrListResultAfterDrop = pubsub_tools:get_users_and_subscription_states(RecvdStanzaAfterDrop),
+                          {true, RecvdStanzaAfterDrop} = pubsub_tools:get_subscription_list_by_owner(Alice,
+                                                                                                     TopicName,
+                                                                                                     ?NODE_ADDR),
+
+                          SubscrListResultAfterDrop = pubsub_tools:get_users_and_subscription_states(
+                                                        RecvdStanzaAfterDrop),
 
                           GeraltsJid = escalus_utils:get_jid(Geralt),
                           error = dict:find(GeraltsJid, SubscrListResultAfterDrop),
@@ -414,17 +451,24 @@ subscription_change_notification_test(Config) ->
                           {true, _RecvdStanza} = pubsub_tools:create_node(Alice, ?NODE_ADDR, TopicName),
                           pubsub_tools:subscribe_by_user(Geralt, TopicName, ?NODE_ADDR),
 
-                          {true, _RecvdStanzaBeforeKick} = pubsub_tools:get_subscription_list_by_owner(Alice, TopicName,  ?NODE_ADDR),
+                          {true, _RecvdStanzaBeforeKick} = pubsub_tools:get_subscription_list_by_owner(Alice,
+                                                                                                       TopicName,
+                                                                                                       ?NODE_ADDR),
 
                           ChangeData = [{escalus_utils:get_jid(Geralt), <<"none">>}],
 
                           %% see 8.8.2.1 or example 187
-                          {_Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, TopicName, ?NODE_ADDR, ChangeData, false),
+                          {_Result, _ResultStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice,
+                                                                                                        TopicName,
+                                                                                                        ?NODE_ADDR,
+                                                                                                        ChangeData,
+                                                                                                        false),
 
                           GeraltGotStanza = escalus:wait_for_stanza(Geralt),
                           io:format(" ------ Geralt got stanza ------ ~n~p~n", [GeraltGotStanza]),
 
-                          {TopicName, <<"none">>} = pubsub_tools:get_event_notification_subscription_change(GeraltGotStanza),
+                          {TopicName, <<"none">>} = pubsub_tools:get_event_notification_subscription_change(
+                                                      GeraltGotStanza),
 
                           pubsub_tools:delete_node_by_owner(Alice, TopicName, ?NODE_ADDR)
 
@@ -442,7 +486,11 @@ subscription_change_notification_test_no_owner(Config) ->
                           ChangeData = [{escalus_utils:get_jid(Geralt), <<"none">>}],
 
                           %% Bob, sucker, is trying to spoof and kick out poor Geralt...
-                          {_Result, BobGotStanza} = pubsub_tools:request_subscription_changes_by_owner(Bob, TopicName, ?NODE_ADDR, ChangeData, true),
+                          {_Result, BobGotStanza} = pubsub_tools:request_subscription_changes_by_owner(Bob,
+                                                                                                       TopicName,
+                                                                                                       ?NODE_ADDR,
+                                                                                                       ChangeData,
+                                                                                                       true),
 
                           {<<"auth">>, <<"forbidden">>} = pubsub_tools:get_error_info(BobGotStanza),
                           pubsub_tools:delete_node_by_owner(Alice, TopicName, ?NODE_ADDR)
@@ -459,7 +507,11 @@ subscription_change_no_topic(Config) ->
                           pubsub_tools:subscribe_by_user(Bob, TopicName, ?NODE_ADDR),
                           ChangeData = [{escalus_utils:get_jid(Geralt), <<"none">>}],
 
-                          {_Result, AliceGotStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice, <<"MYNODEXXX">>,?NODE_ADDR, ChangeData, false),
+                          {_Result, AliceGotStanza} = pubsub_tools:request_subscription_changes_by_owner(Alice,
+                                                                                                         <<"MYNODEXX">>,
+                                                                                                         ?NODE_ADDR,
+                                                                                                         ChangeData,
+                                                                                                         false),
 
                           {<<"cancel">>, <<"item-not-found">>} = pubsub_tools:get_error_info(AliceGotStanza),
                           pubsub_tools:delete_node_by_owner(Alice, TopicName, ?NODE_ADDR)
