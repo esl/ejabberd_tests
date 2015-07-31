@@ -15,26 +15,26 @@
 -include_lib("exml/include/exml_stream.hrl").
 
 -export([
-	 create_node/3,
-	 delete_node_by_owner/3,
-	 wait_for_stanza_and_match_result_iq/3,
-	 get_subscription_confirmation_stanza/1,
-	 get_publish_response_item_id/1,
-	 get_event_notification_items_list/1,
-	 get_event_notification_subscription_change/1,
-	 get_error_info/1,
-	 get_items_ids/1,
-	 get_users_and_subscription_states/1,
-	 get_subscription_list_by_owner/3,
-	 is_subscription_for_jid_pred/3,
-	 is_publish_response_matching_item_id/2,
-	 publish_sample_content/5,
-	 request_subscription_changes_by_owner/5,
-	 subscribe_by_user/3,
-	 subscribe_by_users/3,
-	 unsubscribe_by_user/3,
-	 unsubscribe_by_users/3
-	]).
+         create_node/3,
+         delete_node_by_owner/3,
+         wait_for_stanza_and_match_result_iq/3,
+         get_subscription_confirmation_stanza/1,
+         get_publish_response_item_id/1,
+         get_event_notification_items_list/1,
+         get_event_notification_subscription_change/1,
+         get_error_info/1,
+         get_items_ids/1,
+         get_users_and_subscription_states/1,
+         get_subscription_list_by_owner/3,
+         is_subscription_for_jid_pred/3,
+         is_publish_response_matching_item_id/2,
+         publish_sample_content/5,
+         request_subscription_changes_by_owner/5,
+         subscribe_by_user/3,
+         subscribe_by_users/3,
+         unsubscribe_by_user/3,
+         unsubscribe_by_users/3
+        ]).
 
 %% ----------------------------- HELPER and DIAGNOSTIC functions -----------------------
 %% Note ------ functions in this section are not stanza generating functions but:
@@ -55,11 +55,11 @@ wait_for_stanza_and_match_result_iq(User, Id, DestinationNode) ->
     {Result, ResultStanza}.
 
 create_node(User, DestinationNodeAddr, DestinationNodeName) ->
-   PubSubCreateIq = escalus_pubsub_stanza:create_node(User, DestinationNodeAddr, DestinationNodeName),
-   ct:pal(" REQUEST PubSubCreateIq: ~n~p~n",[exml:to_binary(PubSubCreateIq)]),
-   escalus:send(User, PubSubCreateIq),
-   {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, DestinationNodeAddr).
-   %% example 131
+    PubSubCreateIq = escalus_pubsub_stanza:create_node(User, DestinationNodeAddr, DestinationNodeName),
+    ct:pal(" REQUEST PubSubCreateIq: ~n~p~n",[exml:to_binary(PubSubCreateIq)]),
+    escalus:send(User, PubSubCreateIq),
+    {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, DestinationNodeAddr).
+%% example 131
 
 
 %% returns servers' response stanza, according to 8.8.1.1 (owner case)
@@ -74,15 +74,15 @@ get_subscription_list_by_owner(User, NodeName, NodeAddr) ->
 
 %% generate dummy subscription confirmation from server. Used to test predicate function.
 get_subscription_confirmation_stanza(DestinationNode) ->
-   Subscription = #xmlel{name = <<"subscription">>, attrs=[{<<"jid">>, <<"alice@localhost">>}]},
-   PubSub = escalus_pubsub_stanza:pubsub_stanza([Subscription], ?NS_PUBSUB),
-   %% DestinationNode = ?DEST_NODE_ADDR,
-   Id = <<"sub1">>,
-   PubSubItemIq  =  escalus_pubsub_stanza:iq_with_id(set, Id, DestinationNode, <<"Alice">>,  [PubSub]),
-   %%io:format(" ---- ~n~p~n ", [PubSubItemIq]),
-   %%B = exml:to_binary(PubSubItemIq),
-   %%io:format(" ---- ~n~p~n ", [B]),
-   PubSubItemIq.
+    Subscription = #xmlel{name = <<"subscription">>, attrs=[{<<"jid">>, <<"alice@localhost">>}]},
+    PubSub = escalus_pubsub_stanza:pubsub_stanza([Subscription], ?NS_PUBSUB),
+    %% DestinationNode = ?DEST_NODE_ADDR,
+    Id = <<"sub1">>,
+    PubSubItemIq  =  escalus_pubsub_stanza:iq_with_id(set, Id, DestinationNode, <<"Alice">>,  [PubSub]),
+    %%io:format(" ---- ~n~p~n ", [PubSubItemIq]),
+    %%B = exml:to_binary(PubSubItemIq),
+    %%io:format(" ---- ~n~p~n ", [B]),
+    PubSubItemIq.
 
 get_users_and_subscription_states([]) ->
     dict:new();
@@ -95,22 +95,22 @@ get_users_and_subscription_states(SubscriptionList) ->
     R1 = exml_query:subelement(SubscriptionList, <<"pubsub">>),
     R2 = exml_query:subelement(R1, <<"subscriptions">>),
     Elems = exml_query:subelements(R2, <<"subscription">>),
-    
 
-    Result = lists:map(fun(Element) -> 
-			       JidFull = exml_query:attr(Element, <<"jid">>),
-			       SubscrState = exml_query:attr(Element, <<"subscription">>),
-			       Jid = hd(binary:split(JidFull, <<"/">>)),
-			       {Jid, SubscrState}
-		       end, Elems),
-    
+
+    Result = lists:map(fun(Element) ->
+                               JidFull = exml_query:attr(Element, <<"jid">>),
+                               SubscrState = exml_query:attr(Element, <<"subscription">>),
+                               Jid = hd(binary:split(JidFull, <<"/">>)),
+                               {Jid, SubscrState}
+                       end, Elems),
+
     Res = lists:foldl(
-	    fun(Element, NewDict) ->
-		    dict:store(element(1, Element), element(2,Element), NewDict)
-	    end,
-	    dict:new(), 
-	    Result),
-    
+            fun(Element, NewDict) ->
+                    dict:store(element(1, Element), element(2,Element), NewDict)
+            end,
+            dict:new(),
+            Result),
+
     io:format(" Dump of users subscriptions: ~n~p ", [dict:to_list(Res)]),
     Res.
 
@@ -155,24 +155,24 @@ get_publish_response_item_id(PublishItemConfirmation = #xmlel{name = <<"iq">>}) 
     L3 = exml_query:subelement(L2, <<"item">>),
     io:format(" item element: ~n~p~n", [L3]),
     exml_query:attr(L3, <<"id">>).
-  
+
 %% parameters: previously published item id returned by server
 is_publish_response_matching_item_id(ItemTestId, PublishItemConfirmation) ->
     ItemTestId =:= get_publish_response_item_id(PublishItemConfirmation).
 
 %% publish items witn contents specifying which sample content to use.
 publish_sample_content(DestinationTopicName, DestinationNode, PublishItemId, User, SampleNumber) ->
-   PublishToNodeIq = escalus_pubsub_stanza:publish_sample_content_stanza(DestinationTopicName, DestinationNode, PublishItemId, User, SampleNumber),
-   ReportString = " REQUEST PublishToNodeIq: ~n~p~n",
-   ct:pal(ReportString, [exml:to_binary(PublishToNodeIq)]),
-   io:format(ReportString, [PublishToNodeIq]),
-   escalus:send(User, PublishToNodeIq),
-   {true, _RecvdStanza} = wait_for_stanza_and_match_result_iq(User, IqId, DestinationNode).
+    PublishToNodeIq = escalus_pubsub_stanza:publish_sample_content_stanza(DestinationTopicName, DestinationNode, PublishItemId, User, SampleNumber),
+    ReportString = " REQUEST PublishToNodeIq: ~n~p~n",
+    ct:pal(ReportString, [exml:to_binary(PublishToNodeIq)]),
+    io:format(ReportString, [PublishToNodeIq]),
+    escalus:send(User, PublishToNodeIq),
+    {true, _RecvdStanza} = wait_for_stanza_and_match_result_iq(User, IqId, DestinationNode).
 
 
 %% extract the items from the nested wrapper "items" enclosed in message/event
 %% according to example 101 of XEP there comes always only ONE item but we
-%% deal with the lists anyway for consistency. 
+%% deal with the lists anyway for consistency.
 get_event_notification_items_list(EventMessage = #xmlel{name = <<"message">>}) ->
     Event = exml_query:subelement(EventMessage, <<"event">>),
     ItemsWrapper = exml_query:subelement(Event, <<"items">>),
@@ -202,7 +202,7 @@ get_event_notification_subscription_change(EventMessage = #xmlel{name = <<"messa
 %% returns servers' response stanza, according to 8.8.1.1 (topic owner case!)
 %% pass SubscrChangeData as List of tuples {jid, new_subscription_state}
 request_subscription_changes_by_owner(User, NodeName, NodeAddr, SubscriptionChangeData, AllowSpoofing) ->
-    SubscriptionChangeDataStanza = escalus_pubsub_stanza:get_subscription_change_list_stanza(SubscriptionChangeData),
+    SubscriptionChangeDataStanza = escalus_pubsub_stanza:get_subscription_change_list_stanza(SubscriptionChangeData),                                      
     SetSubscriptionsStanza = escalus_pubsub_stanza:set_subscriptions_stanza(NodeName, SubscriptionChangeDataStanza),
     Id = <<"subman2">>,
     SetSubscriptionsIq = escalus_pubsub_stanza:iq_with_id(set, Id, NodeAddr, User, [SetSubscriptionsStanza]),
