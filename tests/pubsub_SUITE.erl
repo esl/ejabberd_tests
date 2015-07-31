@@ -18,17 +18,13 @@
 %% Suite configuration
 %%--------------------------------------------------------------------
 
-%% pubsub_full_cycle
-%% multiple user scenarios executed in sequence, to check the core pubsub functionality and
-%% if there is no hidden state on server side between the tests.
-
 all() -> [
-	  {group, pubsub_full_cycle},
+	  {group, pubsub_full_cycle_tests},
 	  {group, notification_subscription_tests}
 	 ].
 
 groups() ->  [
-	      {pubsub_full_cycle, [sequence], [
+	      {pubsub_full_cycle_tests, [sequence], [
 					       request_to_create_node_success,
 					       request_to_publish_to_node_success, 
 					       request_to_subscribe_to_node_success,
@@ -48,11 +44,15 @@ groups() ->  [
 							     subscription_change_notification_test,
 							     subscription_change_notification_test_no_owner,
 							     subscription_change_no_topic
-							    ]}
+							    ]
+	      }
 	     ].
 
 suite() ->
     escalus:suite().
+
+-define (NODE_ADDR, <<"pubsub.localhost">>).
+-define (NODE_NAME, <<"princely_musings">>).
 
 %%--------------------------------------------------------------------
 %% Init & teardown
@@ -96,10 +96,6 @@ end_per_testcase(CaseName = request_to_unsubscribe_from_node_by_owner_succes, Co
 end_per_testcase(_TestName, Config) ->
     escalus:end_per_testcase(_TestName, Config).
 
-
-
--define (NODE_ADDR, <<"pubsub.localhost">>).
--define (NODE_NAME, <<"princely_musings">>).
    
 %% XEP0060---8.1.1 Create a node with default configuration ---------------------------
 request_to_create_node_success(Config) ->
@@ -160,12 +156,12 @@ request_to_retract_item_success(Config) ->
 			   io:format(" Received ItemId: ~n~p~n",[RecvdItemId]),
 			   %% see example 100
 
-			   %% ------retraction test------
+			   %% ------retraction test-----
 
-			  RetractFromNode = pubsub_helper:retract_from_node_stanza(?NODE_NAME,
+			  RetractFromNode = escalus_pubsub_stanza:retract_from_node_stanza(?NODE_NAME,
 										   RecvdItemId),
 			   IqId2 = <<"retract1">>,
-			  RetractFromNodeIq  =  pubsub_helper:iq_with_id(set,
+			  RetractFromNodeIq  =  escalus_pubsub_stanza:iq_with_id(set,
 									 IqId2,
 									 ?NODE_ADDR,
 									 Alice,
@@ -206,10 +202,10 @@ request_to_subscribe_to_node_success(Config) ->
 request_all_items_from_node_success(Config) ->
      escalus:story(Config, [{bob,1}],
 		   fun(Bob) ->
-			   RequestAllItems = pubsub_helper:create_request_allitems_stanza(?NODE_NAME),
+			   RequestAllItems = escalus_pubsub_stanza:create_request_allitems_stanza(?NODE_NAME),
 			   DestinationNode = ?NODE_ADDR,
 			   Id = <<"items1">>,
-			   RequestAllItemsIq  =  pubsub_helper:iq_with_id(get, Id, DestinationNode, Bob,  [RequestAllItems]),
+			   RequestAllItemsIq  =  escalus_pubsub_stanza:iq_with_id(get, Id, DestinationNode, Bob,  [RequestAllItems]),
 			   ct:pal(" Request all items (Bob): ~n~n~p~n",[exml:to_binary(RequestAllItemsIq)]),
 			   escalus:send(Bob, RequestAllItemsIq),
 			   {true, Res1} = pubsub_tools:wait_for_stanza_and_match_result_iq(Bob, Id, DestinationNode),
@@ -468,10 +464,7 @@ subscription_change_no_topic(Config) ->
 
 			   {<<"cancel">>, <<"item-not-found">>} = pubsub_tools:get_error_info(AliceGotStanza),
 			   pubsub_tools:delete_node_by_owner(Alice, TopicName, ?NODE_ADDR)
-
 		   end).
-
-
 
 %% call when notification with message payload is expected. Call many times for many messages to consume
 %% all of them (typical case).
@@ -484,8 +477,6 @@ wait_and_get_notification_item_id_for_user(User) ->
     ItemsIdsUser = pubsub_tools:get_items_ids(ItemListUser),
     io:format("-- received ids: ~n~p~n", [ItemsIdsUser]),
     hd(ItemsIdsUser).
-
-
 
 
 
