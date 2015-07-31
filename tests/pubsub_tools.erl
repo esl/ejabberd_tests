@@ -127,10 +127,7 @@ is_subscription_for_jid_pred(SubscrConfirmation, User, _DestinationNode) ->
     JidOfSubscr =:= escalus_utils:get_jid(User).
 
 subscribe_by_user(User, NodeName, NodeAddress) ->
-    SubscribeToNode = escalus_pubsub_stanza:create_subscribe_node_stanza(NodeName, User),
-    UserName = escalus_utils:get_username(User),
-    Id = <<UserName/binary,<<"binsuffix">>/binary>>,
-    SubscribeToNodeIq  =  escalus_pubsub_stanza:iq_with_id(set, Id, NodeAddress, User,  [SubscribeToNode]),
+    SubscribeToNodeIq = escalus_pubsub_stanza:subscribe_by_user_stanza(User, NodeName, NodeAddress),
     io:format(" REQUEST SubscribeToNodeIq from user ~p: ~n~p~n",[UserName, SubscribeToNodeIq]),
     escalus:send(User, SubscribeToNodeIq),
     {true, RecvdStanza} = wait_for_stanza_and_match_result_iq(User, Id, NodeAddress), %%wait for subscr. confirmation
@@ -142,9 +139,7 @@ subscribe_by_users(UserList, NodeName, NodeAddress) ->
 
 %% the user unsubscribes himself
 unsubscribe_by_user(User, NodeName, NodeAddress) ->
-    UnubscribeFromNode = escalus_pubsub_stanza:create_unsubscribe_from_node_stanza(NodeName, User),
-    Id = <<"unsub1">>,
-    UnSubscribeFromNodeIq  = escalus_pubsub_stanza:iq_with_id(set, Id, NodeAddress, User,  [UnubscribeFromNode]),
+    UnSubscribeFromNodeIq = escalus_pubsub_stanza:unsubscribe_by_user_stanza(User, NodeName, NodeAddress),
     ct:pal(" REQUEST UnSubscribeFromNodeIq: ~n~n~p~n",[exml:to_binary(UnSubscribeFromNodeIq)]),
     escalus:send(User, UnSubscribeFromNodeIq),
     {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, NodeAddress).
