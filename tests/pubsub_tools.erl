@@ -55,10 +55,7 @@ wait_for_stanza_and_match_result_iq(User, Id, DestinationNode) ->
     {Result, ResultStanza}.
 
 create_node(User, DestinationNodeAddr, DestinationNodeName) ->
-   PubSubCreate = escalus_pubsub_stanza:create_specific_node_stanza(DestinationNodeName),
-   PubSub = escalus_pubsub_stanza:pubsub_stanza([PubSubCreate], ?NS_PUBSUB),
-   Id = <<"create1">>,
-   PubSubCreateIq  =  escalus_pubsub_stanza:iq_with_id(set, Id, DestinationNodeAddr, User,  [PubSub]),
+   PubSubCreateIq = escalus_pubsub_stanza:create_node(User, DestinationNodeAddr, DestinationNodeName),
    ct:pal(" REQUEST PubSubCreateIq: ~n~p~n",[exml:to_binary(PubSubCreateIq)]),
    escalus:send(User, PubSubCreateIq),
    {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, DestinationNodeAddr).
@@ -170,15 +167,7 @@ is_publish_response_matching_item_id(ItemTestId, PublishItemConfirmation) ->
 
 %% publish items witn contents specifying which sample content to use.
 publish_sample_content(DestinationTopicName, DestinationNode, PublishItemId, User, SampleNumber) ->
-    PublishToNode = case SampleNumber of
-	sample_one -> escalus_pubsub_stanza:create_publish_node_content_stanza(DestinationTopicName, PublishItemId);
-	sample_two -> escalus_pubsub_stanza:create_publish_node_content_stanza_second(DestinationTopicName, PublishItemId);
-	sample_three -> escalus_pubsub_stanza:create_publish_node_content_stanza_third(DestinationTopicName, PublishItemId);
-	_ -> escalus_pubsub_stanza:create_publish_node_content_stanza(DestinationTopicName, PublishItemId)
-    end,
-    
-   IqId = <<"publish1">>,
-   PublishToNodeIq  =  escalus_pubsub_stanza:iq_with_id(set, IqId, DestinationNode, User,  [PublishToNode]),
+   PublishToNodeIq = escalus_pubsub_stanza:publish_sample_content_stanza(DestinationTopicName, DestinationNode, PublishItemId, User, SampleNumber),
    ReportString = " REQUEST PublishToNodeIq: ~n~p~n",
    ct:pal(ReportString, [exml:to_binary(PublishToNodeIq)]),
    io:format(ReportString, [PublishToNodeIq]),
