@@ -55,10 +55,12 @@ wait_for_stanza_and_match_result_iq(User, Id, DestinationNode) ->
     {Result, ResultStanza}.
 
 create_node(User, DestinationNodeAddr, DestinationNodeName) ->
-    PubSubCreateIq = escalus_pubsub_stanza:create_node(User, DestinationNodeAddr, DestinationNodeName),
+    UserName = escalus_utils:get_username(User),
+    Id = <<UserName/binary,<<"binsuffix">>/binary>>,
+    PubSubCreateIq = escalus_pubsub_stanza:create_node_stanza(User, Id, DestinationNodeAddr, DestinationNodeName),
     ct:pal(" REQUEST PubSubCreateIq: ~n~p~n",[exml:to_binary(PubSubCreateIq)]),
     escalus:send(User, PubSubCreateIq),
-    {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, DestinationNodeAddr).
+    {true, _RecvdStanza} = wait_for_stanza_and_match_result_iq(User, Id, DestinationNodeAddr).
 %% example 131
 
 
@@ -127,11 +129,13 @@ is_subscription_for_jid_pred(SubscrConfirmation, User, _DestinationNode) ->
     JidOfSubscr =:= escalus_utils:get_jid(User).
 
 subscribe_by_user(User, NodeName, NodeAddress) ->
-    SubscribeToNodeIq = escalus_pubsub_stanza:subscribe_by_user_stanza(User, NodeName, NodeAddress),
-    io:format(" REQUEST SubscribeToNodeIq from user ~p: ~n~p~n",[UserName, SubscribeToNodeIq]),
+    UserName = escalus_utils:get_username(User),
+    Id = <<UserName/binary,<<"binsuffix">>/binary>>,
+    SubscribeToNodeIq = escalus_pubsub_stanza:subscribe_by_user_stanza(User, Id, NodeName, NodeAddress),
+    io:format(" REQUEST SubscribeToNodeIq from user ~p: ~n~p~n",[User, SubscribeToNodeIq]),
     escalus:send(User, SubscribeToNodeIq),
     {true, RecvdStanza} = wait_for_stanza_and_match_result_iq(User, Id, NodeAddress), %%wait for subscr. confirmation
-    io:format(" RESPONSE Subscriptions received by ~p: ~p~n",[UserName, RecvdStanza]),
+    io:format(" RESPONSE Subscriptions received by ~p: ~p~n",[User, RecvdStanza]),
     is_subscription_for_jid_pred(RecvdStanza, User, NodeName).
 
 subscribe_by_users(UserList, NodeName, NodeAddress) ->
@@ -139,10 +143,12 @@ subscribe_by_users(UserList, NodeName, NodeAddress) ->
 
 %% the user unsubscribes himself
 unsubscribe_by_user(User, NodeName, NodeAddress) ->
-    UnSubscribeFromNodeIq = escalus_pubsub_stanza:unsubscribe_by_user_stanza(User, NodeName, NodeAddress),
+    UserName = escalus_utils:get_username(User),
+    Id = <<UserName/binary,<<"binsuffix">>/binary>>,
+    UnSubscribeFromNodeIq = escalus_pubsub_stanza:unsubscribe_by_user_stanza(User, Id, NodeName, NodeAddress),
     ct:pal(" REQUEST UnSubscribeFromNodeIq: ~n~n~p~n",[exml:to_binary(UnSubscribeFromNodeIq)]),
     escalus:send(User, UnSubscribeFromNodeIq),
-    {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, NodeAddress).
+    {true, _RecvdStanza} = wait_for_stanza_and_match_result_iq(User, Id, NodeAddress).
 
 unsubscribe_by_users(UserList, NodeName, NodeAddress) ->
     lists:map(fun(User) -> unsubscribe_by_user(User, NodeName, NodeAddress) end, UserList).
@@ -162,12 +168,18 @@ is_publish_response_matching_item_id(ItemTestId, PublishItemConfirmation) ->
 
 %% publish items witn contents specifying which sample content to use.
 publish_sample_content(DestinationTopicName, DestinationNode, PublishItemId, User, SampleNumber) ->
-    PublishToNodeIq = escalus_pubsub_stanza:publish_sample_content_stanza(DestinationTopicName, DestinationNode, PublishItemId, User, SampleNumber),
+    Id = <<"publish1">>, %%todo: pass as parameter to function below!
+    PublishToNodeIq = escalus_pubsub_stanza:publish_sample_content_stanza(DestinationTopicName,
+                                                                          DestinationNode,
+                                                                          PublishItemId,
+                                                                          User,
+                                                                          SampleNumber),
     ReportString = " REQUEST PublishToNodeIq: ~n~p~n",
     ct:pal(ReportString, [exml:to_binary(PublishToNodeIq)]),
     io:format(ReportString, [PublishToNodeIq]),
     escalus:send(User, PublishToNodeIq),
-    {true, _RecvdStanza} = wait_for_stanza_and_match_result_iq(User, IqId, DestinationNode).
+
+    {true, _RecvdStanza} = wait_for_stanza_and_match_result_iq(User, Id, DestinationNode).
 
 
 %% extract the items from the nested wrapper "items" enclosed in message/event
@@ -223,7 +235,7 @@ delete_node_by_owner(User, NodeName, NodeAddr) ->
     DeleteNodeIq  =  escalus_pubsub_stanza:iq_with_id(set, Id, NodeAddr, User,  [DeleteNode]),
     io:format(" REQUEST DeleteNodeIq: ~n~n~p~n",[DeleteNodeIq]),
     escalus:send(User, DeleteNodeIq),
-    {true, _RecvdStanza} = pubsub_tools:wait_for_stanza_and_match_result_iq(User, Id, NodeAddr).
+    {true, _RecvdStanza} = wait_for_stanza_and_match_result_iq(User, Id, NodeAddr).
 
 
 
