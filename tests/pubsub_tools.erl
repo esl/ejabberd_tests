@@ -26,7 +26,7 @@
          get_items_ids/1,
          get_users_and_subscription_states/1,
          get_subscription_list_by_owner/3,
-         is_subscription_for_jid_pred/3,
+         assert_subscription_matching/4,
          is_publish_response_matching_item_id/2,
          publish_sample_content/5,
          request_subscription_changes_by_owner/5,
@@ -117,16 +117,17 @@ get_users_and_subscription_states(SubscriptionList) ->
     Res.
 
 
-is_subscription_for_jid_pred(SubscrConfirmation, User, _DestinationNode) ->
-    %% Stanza = get_subscription_confirmation_stanza(DestinationNode),
-    %% R = exml_query:path(Stanza, <<"pubsub>>">>),
+assert_subscription_matching(SubscrConfirmation, User, _DestinationNode, OptionalAttrCheck) ->
     R1 = exml_query:subelement(SubscrConfirmation, <<"pubsub">>),
-    io:format(" -- ~n~p",[R1]),
-    R2 = exml_query:subelement(R1, <<"subscription">>),
-    io:format(" ------ ~n~p",[R2]),
-    JidOfSubscr = exml_query:attr(R2, <<"jid">>),
-    io:format(" -- jid found : ~n~p", [JidOfSubscr]),
-    JidOfSubscr =:= escalus_utils:get_jid(User).
+    Subscr =  exml_query:subelement(R1, <<"subscription">>),
+    Jid = exml_query:attr(Subscr, <<"jid">>), %% required
+    Jid =:= escalus_utils:get_jid(User), %%Sender matches?
+    if OptionalAttrCheck ->
+            Val1 = exml_query:attr(Subscr, <<"node">>) =/= undefined, %% optional
+            Val2 = exml_query:attr(Subscr, <<"subid">>) =/= undefined, %% optional
+            Val3 = exml_query:attr(Subscr, <<"subscription">>) =/= undefined, %% optional
+            Val1 and Val2 and Val3
+    end.
 
 subscribe_by_user(User, NodeName, NodeAddress) ->
     UserName = escalus_utils:get_username(User),
@@ -135,8 +136,8 @@ subscribe_by_user(User, NodeName, NodeAddress) ->
     io:format(" REQUEST SubscribeToNodeIq from user ~p: ~n~p~n",[User, SubscribeToNodeIq]),
     escalus:send(User, SubscribeToNodeIq),
     {true, RecvdStanza} = wait_for_stanza_and_match_result_iq(User, Id, NodeAddress), %%wait for subscr. confirmation
-    io:format(" RESPONSE Subscriptions received by ~p: ~p~n",[User, RecvdStanza]),
-    is_subscription_for_jid_pred(RecvdStanza, User, NodeName).
+    io:format(" RESPONSE Subscriptions received : ~p~n",[RecvdStanza]),
+    true = assert_subscription_matching(RecvdStanza, User, NodeName, true).
 
 subscribe_by_users(UserList, NodeName, NodeAddress) ->
     lists:map(fun(User) -> subscribe_by_user(User, NodeName, NodeAddress) end, UserList).
@@ -214,7 +215,7 @@ get_event_notification_subscription_change(EventMessage = #xmlel{name = <<"messa
 %% returns servers' response stanza, according to 8.8.1.1 (topic owner case!)
 %% pass SubscrChangeData as List of tuples {jid, new_subscription_state}
 request_subscription_changes_by_owner(User, NodeName, NodeAddr, SubscriptionChangeData, AllowSpoofing) ->
-    SubscriptionChangeDataStanza = escalus_pubsub_stanza:get_subscription_change_list_stanza(SubscriptionChangeData),                                      
+    SubscriptionChangeDataStanza = escalus_pubsub_stanza:get_subscription_change_list_stanza(SubscriptionChangeData),
     SetSubscriptionsStanza = escalus_pubsub_stanza:set_subscriptions_stanza(NodeName, SubscriptionChangeDataStanza),
     Id = <<"subman2">>,
     SetSubscriptionsIq = escalus_pubsub_stanza:iq_with_id(set, Id, NodeAddr, User, [SetSubscriptionsStanza]),
@@ -222,7 +223,7 @@ request_subscription_changes_by_owner(User, NodeName, NodeAddr, SubscriptionChan
     escalus:send(User, SetSubscriptionsIq ),
 
     case AllowSpoofing of
-	true ->  {true, escalus:wait_for_stanza(User)};
+        true ->  {true, escalus:wait_for_stanza(User)};
         _ -> wait_for_stanza_and_match_result_iq(User, Id, NodeAddr)
     end.
 
