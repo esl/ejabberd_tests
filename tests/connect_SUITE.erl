@@ -48,7 +48,8 @@ all() ->
 
 groups() ->
     [{negative, [], [invalid_host,
-                     invalid_stream_namespace]},
+                     invalid_stream_namespace,
+                     element_before_stream_start]},
      {pre_xmpp_1_0, [], [pre_xmpp_1_0_stream]},
      {starttls, test_cases()},
      {tls, generate_tls_vsn_tests()}].
@@ -89,10 +90,10 @@ init_per_group(tls, Config) ->
     JoeSpec2 = {?SECURE_USER, lists:keystore(ssl, 1, JoeSpec, {ssl, true})},
     NewUsers = lists:keystore(?SECURE_USER, 1, Users, JoeSpec2),
     lists:keystore(escalus_users, 1, Config, {escalus_users, NewUsers});
-init_per_group(_, Config) ->
+init_per_group(_GroupName, Config) ->
     Config.
 
-end_per_group(_, Config) ->
+end_per_group(_GroupName, Config) ->
     Config.
 
 generate_tls_vsn_tests() ->
@@ -123,6 +124,16 @@ invalid_stream_namespace(Config) ->
     %% then
     escalus:assert(is_stream_start, Start),
     escalus:assert(is_stream_error, [<<"invalid-namespace">>, <<>>], Error),
+    escalus:assert(is_stream_end, End).
+
+element_before_stream_start(Config) ->
+    %% given
+    Spec = escalus_users:get_userspec(Config, alice),
+    %% when
+    [Error, End] = send_stream_element_before_stream_start(Spec),
+    ct:pal("ee: ~p", [[Error, End]]),
+    %% then
+    escalus:assert(is_stream_error, [<<"xml-not-well-formed">>, <<>>], Error),
     escalus:assert(is_stream_end, End).
 
 pre_xmpp_1_0_stream(Config) ->
@@ -237,6 +248,13 @@ connect_with_invalid_stream_namespace(Spec) ->
         end,
     {ok, Conn, _, _} = escalus_connection:start(Spec, [F]),
     escalus:wait_for_stanzas(Conn, 3).
+
+send_stream_element_before_stream_start(Spec) ->
+    {ok, Conn, _, _} = escalus_connection:start(Spec, []),
+    S = escalus_stanza:chat_to(escalus_users:get_jid([], Spec), <<"hi, me!">>),
+    ct:pal("s: ~p", [S]),
+    escalus:send(Conn, S),
+    escalus:wait_for_stanzas(Conn, 2).
 
 stream_start_invalid_stream_ns(To) ->
     stream_start(lists:keystore(stream_ns, 1, default_context(To),
