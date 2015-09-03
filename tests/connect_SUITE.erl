@@ -56,7 +56,8 @@ groups() ->
 test_cases() ->
     generate_tls_vsn_tests() ++
     [should_fail_with_sslv3,
-     should_fail_to_authenticate_without_starttls].
+     should_fail_to_authenticate_without_starttls,
+     should_not_send_other_features_with_starttls_required].
 
 suite() ->
     escalus:suite().
@@ -188,6 +189,17 @@ should_fail_to_authenticate_without_starttls(Config) ->
                                              <<"Use of STARTTLS required">>],
                            AuthReply)
     end.
+
+should_not_send_other_features_with_starttls_required(Config) ->
+    UserSpec = escalus_users:get_userspec(Config, ?SECURE_USER),
+    {ok, Conn, _, _} = escalus_connection:start(UserSpec, [start_stream]),
+    Features = case escalus_connection:get_stanza(Conn, wait_for_features) of
+        #xmlel{name = <<"stream:features">>, children = Children} -> Children;
+        #xmlel{name = <<"features">>, children = Children} -> Children
+    end,
+    ?assertMatch([#xmlel{name = <<"starttls">>,
+                         children = [#xmlel{name = <<"required">>}]}],
+                 Features).
 
 %%--------------------------------------------------------------------
 %% Internal functions
