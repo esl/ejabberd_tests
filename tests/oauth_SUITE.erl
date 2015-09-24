@@ -132,9 +132,6 @@ login_test(Config, {AccessToken, _RefreshToken}) ->
     ct:pal( " ~n ------ Features [1]  ~p ~n ", [NewFeatures]).
 
 
-myhandler() ->
-    ct:pal(" rsteinrasitenarsietnarsioenarsietnarsitnn ").
-
 get_auth_method()        ->
     XMPPDomain = escalus_ejabberd:unify_str_arg(
                    ct:get_config(ejabberd_domain)),
@@ -149,10 +146,6 @@ set_store_password(Type) ->
     NewAuthOpts = lists:keystore(password_format, 1, AuthOpts, {password_format, Type}),
     escalus_ejabberd:rpc(ejabberd_config, add_local_option,
                          [{auth_opts, XMPPDomain}, NewAuthOpts]).
-
-
-bubu()->
-  io:format("----", []).
 
 config_password_format(login_scram) ->
     set_store_password(scram);
