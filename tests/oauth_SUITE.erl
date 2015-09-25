@@ -34,8 +34,8 @@ groups() ->
     [{oauth, [sequence], all_tests()}].
 
 all_tests() ->
-    [request_and_get_tokens_test
-    %login_test
+    [request_tokens_test,
+     login_access_token_test
     ].
 
 suite() ->
@@ -74,7 +74,11 @@ end_per_testcase(CaseName, Config) ->
 
 
 %% alice makes request and should get access and refresh tokens from the server.
-request_and_get_tokens_test(Config) ->
+request_tokens_test(Config) ->
+    request_tokens_impl(Config).
+
+
+request_tokens_impl(Config) ->
     Self = self(),
     Ref = make_ref(),
     escalus:story(Config, [{john, 1}], fun(John) ->
@@ -86,25 +90,23 @@ request_and_get_tokens_test(Config) ->
                                                Result = escalus:wait_for_stanza(John),
                                                {AT, RT} = extract_tokens(Result),
                                                Self ! {tokens, Ref, {AT,RT}},
-                                                % ct:pal("~n-- response ~p " , [Result]),
                                                ct:pal("~n extracted tokens: ~p ~n ~p ~n " , [AT,RT])
                                        end),
     receive
         {tokens, Ref, Tokens} ->
-            ct:pal( "...confg2 is: ~n~p~n:", [Tokens]),
-            login_test(Config, Tokens)
+            Tokens
     after
         1000 -> error
     end.
 
-extract_tokens(#xmlel{name = <<"iq">>, children = [#xmlel{name = <<"items">>} = Items ]}) ->
-    ATD = exml_query:path(Items, [{element, <<"access_token">>}, cdata]),
-    RTD = exml_query:path(Items, [{element, <<"refresh_token">>}, cdata]),
-    {base64:decode(ATD), base64:decode(RTD)}.
+login_access_token_test(Config) ->
+    Tokens = request_tokens_impl(Config),
+    login_access_token_impl(Config, Tokens).
 
-login_test(Config, {AccessToken, _RefreshToken}) ->
-
-    ct:pal( "login_test config: ~n~p~n:", [Config]),
+%% users logs in using access token he obtained in previous session (stream has been
+%% already reset)
+login_access_token_impl(Config, {AccessToken, _RefreshToken}) ->
+    ct:pal( "login_access_token_impl config: ~n~p~n:", [Config]),
 
     Users = proplists:get_value(escalus_users, Config),
     ct:pal( " ~n ------ users from config ~p ~n ", [Users]),
@@ -119,17 +121,23 @@ login_test(Config, {AccessToken, _RefreshToken}) ->
 
     {ok, Connection, Props, Features} = escalus_connection:start(JohnSpec, ConnSteps),
 
-    ct:pal( " ~n ------ Features [0]   ~p ~n ", [Features]),
+    ct:pal( " ~n ------Stream Features [0]   ~p ~n ", [Features]),
 
     Props2 = lists:keystore(access_token, 1, Props, {access_token, AccessToken}),
 
-    R = (catch escalus_auth:auth_sasl_oauth(Connection, Props2)),
-    ct:pal( " ~n ------ auth_sasl_oauth result   ~p ~n ", [R]),
+    AuthResult = (catch escalus_auth:auth_sasl_oauth(Connection, Props2)),
+    ct:pal( " ~n ------ SASL auth result   ~p ~n ", [AuthResult]),
 
     escalus_connection:reset_parser(Connection),
     {Props3, []} = escalus_session:start_stream(Connection, Props2),
     NewFeatures = escalus_session:stream_features(Connection, Props3, []),
-    ct:pal( " ~n ------ Features [1]  ~p ~n ", [NewFeatures]).
+    ct:pal( " ~n ------ Stream Features [1]  ~p ~n ", [NewFeatures]).
+
+
+extract_tokens(#xmlel{name = <<"iq">>, children = [#xmlel{name = <<"items">>} = Items ]}) ->
+    ATD = exml_query:path(Items, [{element, <<"access_token">>}, cdata]),
+    RTD = exml_query:path(Items, [{element, <<"refresh_token">>}, cdata]),
+    {base64:decode(ATD), base64:decode(RTD)}.
 
 
 get_auth_method()        ->
