@@ -35,7 +35,8 @@ groups() ->
 
 all_tests() ->
     [request_tokens_test,
-     login_access_token_test
+     login_access_token_test,
+     login_refresh_token_test
     ].
 
 suite() ->
@@ -88,7 +89,7 @@ request_tokens_once_logged_in_impl(Config) ->
                                                Result = escalus:wait_for_stanza(John),
                                                {AT, RT} = extract_tokens(Result),
                                                Self ! {tokens, Ref, {AT,RT}},
-                                               ct:pal("~n Access token: ~n ~p Refresh token: ~n ~p ~n " , [AT,RT])
+                                               ct:pal("~n Access token: ~n ~p ~nRefresh token: ~n ~p ~n " , [AT,RT])
                                        end),
     receive
         {tokens, Ref, Tokens} ->
@@ -100,27 +101,15 @@ request_tokens_once_logged_in_impl(Config) ->
 login_access_token_test(Config) ->
     Tokens = request_tokens_once_logged_in_impl(Config),
     login_access_token_impl(Config, Tokens).
-    %% Users = proplists:get_value(escalus_users, Config),
-    %% ct:pal( " ~n ------ users from config ~p ~n ", [Users]),
-
-    %% JohnSpec = escalus_users:get_userspec(Config, john),
-    %% ct:pal( " ~n ------ john spec   ~p ~n ", [JohnSpec]),
-
-    %% ct:pal(" --- is client? :~p~n",[escalus_client:is_client(JohnSpec)]),
-
-    %% escalus:send(JohnSpec, escalus_stanza:presence(<<"available">>)),
-    %% escalus:assert(is_presence, escalus:wait_for_stanza(JohnSpec)).
 
 
-%% users logs in using access token he obtained in previous session (stream has been
-%% already reset)
-login_access_token_impl(Config, {AccessToken, _RefreshToken}) ->
-    ct:pal( "login_access_token_impl config: ~n~p~n:", [Config]),
+ login_refresh_token_test(Config) ->
+    Tokens = request_tokens_once_logged_in_impl(Config),
+    login_refresh_token_impl(Config, Tokens).
 
-    Users = proplists:get_value(escalus_users, Config),
-    ct:pal( " ~n ------ users from config ~p ~n ", [Users]),
+
+login_refresh_token_impl(Config, {_AccessToken, RefreshToken}) ->
     JohnSpec = escalus_users:get_userspec(Config, john),
-    ct:pal( " ~n ------ john spec   ~p ~n ", [JohnSpec]),
 
     ConnSteps = [start_stream,
                         stream_features,
@@ -128,16 +117,40 @@ login_access_token_impl(Config, {AccessToken, _RefreshToken}) ->
                         maybe_use_compression
                         ],
 
-    {ok, ClientConnection, Props, Features} = escalus_connection:start(JohnSpec, ConnSteps),
+    {ok, ClientConnection, Props, _Features} = escalus_connection:start(JohnSpec, ConnSteps),
+
+    Props2 = lists:keystore(oauth_token, 1, Props, {oauth_token, RefreshToken}),
+
+    AuthResult = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
+    ct:pal( " ~n ------ SASL (refresh token) auth result   ~p ~n ", [AuthResult]),
+
+    ok.
+
+%% users logs in using access token he obtained in previous session (stream has been
+%% already reset)
+login_access_token_impl(Config, {AccessToken, _RefreshToken}) ->
+    % ct:pal( "login_access_token_impl config: ~n~p~n:", [Config]),
+    % Users = proplists:get_value(escalus_users, Config),
+    % ct:pal( " ~n ------ users from config ~p ~n ", [Users]),
+    JohnSpec = escalus_users:get_userspec(Config, john),
+    % ct:pal( " ~n ------ john spec   ~p ~n ", [JohnSpec]),
+
+    ConnSteps = [start_stream,
+                        stream_features,
+                        maybe_use_ssl,
+                        maybe_use_compression
+                        ],
+
+    {ok, ClientConnection, Props, _Features} = escalus_connection:start(JohnSpec, ConnSteps),
 
     %ct:pal( " ~n ------connection data ~p ~n ", [ClientConnection]),
 
     %ct:pal( " ~n ------Stream Features [0]   ~p ~n ", [Features]),
 
-    Props2 = lists:keystore(access_token, 1, Props, {access_token, AccessToken}),
+    Props2 = lists:keystore(oauth_token, 1, Props, {oauth_token, AccessToken}),
 
     AuthResult = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
-    ct:pal( " ~n ------ SASL auth result   ~p ~n ", [AuthResult]),
+    ct:pal( " ~n ------ SASL (access token) auth result   ~p ~n ", [AuthResult]),
 
 
     escalus_connection:reset_parser(ClientConnection),
