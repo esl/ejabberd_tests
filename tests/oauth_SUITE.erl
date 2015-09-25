@@ -69,16 +69,14 @@ init_per_testcase(CaseName, Config0) ->
     escalus:init_per_testcase(CaseName, Config0).
 
 end_per_testcase(CaseName, Config) ->
-    % mongoose_helper:clear_last_activity(Config, AnonJID),
     escalus:end_per_testcase(CaseName, Config).
 
-
-%% alice makes request and should get access and refresh tokens from the server.
 request_tokens_test(Config) ->
-    request_tokens_impl(Config).
+    request_tokens_once_logged_in_impl(Config).
 
-
-request_tokens_impl(Config) ->
+%% log in using predefined authentication mechanism (scram-sha1 preferred) and
+%% issue query requesting issuing of Access and Refresh tokens.
+request_tokens_once_logged_in_impl(Config) ->
     Self = self(),
     Ref = make_ref(),
     escalus:story(Config, [{john, 1}], fun(John) ->
@@ -90,7 +88,7 @@ request_tokens_impl(Config) ->
                                                Result = escalus:wait_for_stanza(John),
                                                {AT, RT} = extract_tokens(Result),
                                                Self ! {tokens, Ref, {AT,RT}},
-                                               ct:pal("~n extracted tokens: ~p ~n ~p ~n " , [AT,RT])
+                                               ct:pal("~n Access token: ~n ~p Refresh token: ~n ~p ~n " , [AT,RT])
                                        end),
     receive
         {tokens, Ref, Tokens} ->
@@ -100,8 +98,19 @@ request_tokens_impl(Config) ->
     end.
 
 login_access_token_test(Config) ->
-    Tokens = request_tokens_impl(Config),
+    Tokens = request_tokens_once_logged_in_impl(Config),
     login_access_token_impl(Config, Tokens).
+    %% Users = proplists:get_value(escalus_users, Config),
+    %% ct:pal( " ~n ------ users from config ~p ~n ", [Users]),
+
+    %% JohnSpec = escalus_users:get_userspec(Config, john),
+    %% ct:pal( " ~n ------ john spec   ~p ~n ", [JohnSpec]),
+
+    %% ct:pal(" --- is client? :~p~n",[escalus_client:is_client(JohnSpec)]),
+
+    %% escalus:send(JohnSpec, escalus_stanza:presence(<<"available">>)),
+    %% escalus:assert(is_presence, escalus:wait_for_stanza(JohnSpec)).
+
 
 %% users logs in using access token he obtained in previous session (stream has been
 %% already reset)
@@ -119,19 +128,32 @@ login_access_token_impl(Config, {AccessToken, _RefreshToken}) ->
                         maybe_use_compression
                         ],
 
-    {ok, Connection, Props, Features} = escalus_connection:start(JohnSpec, ConnSteps),
+    {ok, ClientConnection, Props, Features} = escalus_connection:start(JohnSpec, ConnSteps),
 
-    ct:pal( " ~n ------Stream Features [0]   ~p ~n ", [Features]),
+    %ct:pal( " ~n ------connection data ~p ~n ", [ClientConnection]),
+
+    %ct:pal( " ~n ------Stream Features [0]   ~p ~n ", [Features]),
 
     Props2 = lists:keystore(access_token, 1, Props, {access_token, AccessToken}),
 
-    AuthResult = (catch escalus_auth:auth_sasl_oauth(Connection, Props2)),
+    AuthResult = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
     ct:pal( " ~n ------ SASL auth result   ~p ~n ", [AuthResult]),
 
-    escalus_connection:reset_parser(Connection),
-    {Props3, []} = escalus_session:start_stream(Connection, Props2),
-    NewFeatures = escalus_session:stream_features(Connection, Props3, []),
-    ct:pal( " ~n ------ Stream Features [1]  ~p ~n ", [NewFeatures]).
+
+    escalus_connection:reset_parser(ClientConnection),
+    {Props3, []} = escalus_session:start_stream(ClientConnection, Props2),
+    NewFeatures = escalus_session:stream_features(ClientConnection, Props3, []),
+    %ct:pal( " ~n ------ Stream Features [1]  ~p ~n ", [NewFeatures]),
+
+    {NewClientConnection, Props4, NewFeatures2} = escalus_session:bind(ClientConnection, Props3, NewFeatures),
+    ct:pal( " ~n ------ after Bind Props  ~p ~n ~p ~n ~p ~n", [NewClientConnection, Props4, NewFeatures2]),
+
+
+    {NewClientConnection2, Props5, NewFeatures3} = escalus_session:session(NewClientConnection, Props4, NewFeatures2),
+    ct:pal( " ~n ------ after sesstion Props  ~p ~n ~p ~n ~p ~n", [NewClientConnection2, Props5, NewFeatures3]),
+
+    escalus:send(NewClientConnection2, escalus_stanza:presence(<<"available">>)),
+    escalus:assert(is_presence, escalus:wait_for_stanza(NewClientConnection2)).
 
 
 extract_tokens(#xmlel{name = <<"iq">>, children = [#xmlel{name = <<"items">>} = Items ]}) ->
