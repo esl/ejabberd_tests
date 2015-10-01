@@ -34,8 +34,8 @@ groups() ->
     [{oauth, [sequence], all_tests()}].
 
 all_tests() ->
-    [%request_tokens_test,
-     %login_access_token_test,
+    [request_tokens_test,
+     login_access_token_test,
      login_refresh_token_test
     ].
 
@@ -119,25 +119,19 @@ login_refresh_token_impl(Config, {_AccessToken, RefreshToken}) ->
 
     {ok, ClientConnection, Props, _Features} = escalus_connection:start(JohnSpec, ConnSteps),
 
-    ct:pal( " ~n ------ refresh token sent  ~p ~n ", [RefreshToken]),
-
+    ct:pal( " ~n ------ refresh token sent~n ~p ~n ", [RefreshToken]),
 
     Props2 = lists:keystore(oauth_token, 1, Props, {oauth_token, RefreshToken}),
 
-    AuthResult = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
-    ct:pal( " ~n ------ SASL (refresh token) auth result   ~p ~n ", [AuthResult]),
+    AuthResultToken = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
+    ct:pal( " ~n ------ access token received~n ~p ~n ", [AuthResultToken]),
 
     ok.
 
 %% users logs in using access token he obtained in previous session (stream has been
 %% already reset)
 login_access_token_impl(Config, {AccessToken, _RefreshToken}) ->
-    % ct:pal( "login_access_token_impl config: ~n~p~n:", [Config]),
-    % Users = proplists:get_value(escalus_users, Config),
-    % ct:pal( " ~n ------ users from config ~p ~n ", [Users]),
     JohnSpec = escalus_users:get_userspec(Config, john),
-    % ct:pal( " ~n ------ john spec   ~p ~n ", [JohnSpec]),
-
     ConnSteps = [start_stream,
                         stream_features,
                         maybe_use_ssl,
@@ -145,29 +139,19 @@ login_access_token_impl(Config, {AccessToken, _RefreshToken}) ->
                         ],
 
     {ok, ClientConnection, Props, _Features} = escalus_connection:start(JohnSpec, ConnSteps),
-
     %ct:pal( " ~n ------connection data ~p ~n ", [ClientConnection]),
-
     %ct:pal( " ~n ------Stream Features [0]   ~p ~n ", [Features]),
-
     Props2 = lists:keystore(oauth_token, 1, Props, {oauth_token, AccessToken}),
-
     AuthResult = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
     ct:pal( " ~n ------ SASL (access token) auth result   ~p ~n ", [AuthResult]),
-
-
     escalus_connection:reset_parser(ClientConnection),
     {Props3, []} = escalus_session:start_stream(ClientConnection, Props2),
     NewFeatures = escalus_session:stream_features(ClientConnection, Props3, []),
-    %ct:pal( " ~n ------ Stream Features [1]  ~p ~n ", [NewFeatures]),
-
+    %todo: create step out of above lines
     {NewClientConnection, Props4, NewFeatures2} =
         escalus_session:bind(ClientConnection, Props3, NewFeatures),
-    % ct:pal( " ~n  after Bind Props  ~p ~n ~p ~n ~p ~n", [NewClientConnection, Props4, NewFeatures2]),
-
     {NewClientConnection2, Props5, NewFeatures3} =
         escalus_session:session(NewClientConnection, Props4, NewFeatures2),
-    % ct:pal( " ~n after sesstion Props  ~p ~n ~p ~n ~p ~n", [NewClientConnection2, Props5, NewFeatures3]),
 
     escalus:send(NewClientConnection2, escalus_stanza:presence(<<"available">>)),
     escalus:assert(is_presence, escalus:wait_for_stanza(NewClientConnection2)).
