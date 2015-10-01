@@ -36,7 +36,8 @@ groups() ->
 all_tests() ->
     [request_tokens_test,
      login_access_token_test,
-     login_refresh_token_test
+     login_refresh_token_test,
+     login_with_revoked_token_test
     ].
 
 suite() ->
@@ -75,8 +76,32 @@ end_per_testcase(CaseName, Config) ->
 request_tokens_test(Config) ->
     request_tokens_once_logged_in_impl(Config).
 
-%% log in using predefined authentication mechanism (scram-sha1 preferred) and
-%% issue query requesting issuing of Access and Refresh tokens.
+login_with_revoked_token_test(Config) ->
+    %% given
+    S = fun(John) ->
+                Token = get_revoked_token(John),
+                self() ! {revoked_token, Token}
+        end,
+    escalus:story(Config, [{john, 1}], S),
+    RevokedToken = receive
+                       {revoked_token, T} -> T
+                   end,
+    {{auth_failed, _}, _, _} = login_with_token(Config, john, RevokedToken).
+
+get_revoked_token(Client) ->
+    XMPPDomain = escalus_client:server(Client),
+    BJID = escalus_client:short_jid(Client),
+    JID = escalus_ejabberd:rpc(jlib, binary_to_jid, [BJID]),
+    Token = escalus_ejabberd:rpc(mod_auth_token, token, [refresh, JID]),
+    ValidSeqNo = escalus_ejabberd:rpc(mod_auth_token_backend, get_sequence_number,
+                                      [refresh, JID]),
+    ct:pal( "~n ValidSEQ ~n~p", [ValidSeqNo]),
+    RevokedToken = setelement(5, Token, invalid_sequence_no(ValidSeqNo)),
+    escalus_ejabberd:rpc(mod_auth_token, serialize, [RevokedToken]).
+
+invalid_sequence_no(SeqNo) ->
+    SeqNo + 1.
+
 request_tokens_once_logged_in_impl(Config) ->
     Self = self(),
     Ref = make_ref(),
@@ -131,19 +156,7 @@ login_refresh_token_impl(Config, {_AccessToken, RefreshToken}) ->
 %% users logs in using access token he obtained in previous session (stream has been
 %% already reset)
 login_access_token_impl(Config, {AccessToken, _RefreshToken}) ->
-    JohnSpec = escalus_users:get_userspec(Config, john),
-    ConnSteps = [start_stream,
-                        stream_features,
-                        maybe_use_ssl,
-                        maybe_use_compression
-                        ],
-
-    {ok, ClientConnection, Props, _Features} = escalus_connection:start(JohnSpec, ConnSteps),
-    %ct:pal( " ~n ------connection data ~p ~n ", [ClientConnection]),
-    %ct:pal( " ~n ------Stream Features [0]   ~p ~n ", [Features]),
-    Props2 = lists:keystore(oauth_token, 1, Props, {oauth_token, AccessToken}),
-    AuthResult = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
-    ct:pal( " ~n ------ SASL (access token) auth result   ~p ~n ", [AuthResult]),
+    {{ok, _ }, ClientConnection, Props2} = login_with_token(Config, john, AccessToken),
     escalus_connection:reset_parser(ClientConnection),
     {Props3, []} = escalus_session:start_stream(ClientConnection, Props2),
     NewFeatures = escalus_session:stream_features(ClientConnection, Props3, []),
@@ -152,16 +165,28 @@ login_access_token_impl(Config, {AccessToken, _RefreshToken}) ->
         escalus_session:bind(ClientConnection, Props3, NewFeatures),
     {NewClientConnection2, Props5, NewFeatures3} =
         escalus_session:session(NewClientConnection, Props4, NewFeatures2),
-
     escalus:send(NewClientConnection2, escalus_stanza:presence(<<"available">>)),
     escalus:assert(is_presence, escalus:wait_for_stanza(NewClientConnection2)).
 
+login_with_token(Config, User, Token) ->
+    UserSpec = escalus_users:get_userspec(Config, User),
+    ConnSteps = [start_stream,
+                        stream_features,
+                        maybe_use_ssl,
+                        maybe_use_compression
+                        ],
+    {ok, ClientConnection, Props, _Features} = escalus_connection:start(UserSpec, ConnSteps),
+    %ct:pal( " ~n ------connection data ~p ~n ", [ClientConnection]),
+    %ct:pal( " ~n ------Stream Features [0]   ~p ~n ", [Features]),
+    Props2 = lists:keystore(oauth_token, 1, Props, {oauth_token, Token}),
+    AuthResult = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
+    ct:pal( " ~n ------ SASL (access token) auth result   ~p ~n ", [AuthResult]),
+    {AuthResult, ClientConnection, Props2}.
 
 extract_tokens(#xmlel{name = <<"iq">>, children = [#xmlel{name = <<"items">>} = Items ]}) ->
     ATD = exml_query:path(Items, [{element, <<"access_token">>}, cdata]),
     RTD = exml_query:path(Items, [{element, <<"refresh_token">>}, cdata]),
     {base64:decode(ATD), base64:decode(RTD)}.
-
 
 get_auth_method()        ->
     XMPPDomain = escalus_ejabberd:unify_str_arg(
