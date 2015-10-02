@@ -78,19 +78,14 @@ request_tokens_test(Config) ->
 
 login_with_revoked_token_test(Config) ->
     %% given
-    S = fun(John) ->
-                Token = get_revoked_token(John),
-                self() ! {revoked_token, Token}
-        end,
-    escalus:story(Config, [{john, 1}], S),
-    RevokedToken = receive
-                       {revoked_token, T} -> T
-                   end,
-    {{auth_failed, _}, _, _} = login_with_token(Config, john, RevokedToken).
+    RevokedToken = get_revoked_token(Config, john),
+    %% when
+    Result = login_with_token(Config, john, RevokedToken),
+    % then
+    {{auth_failed, _}, _, _} = Result.
 
-get_revoked_token(Client) ->
-    XMPPDomain = escalus_client:server(Client),
-    BJID = escalus_client:short_jid(Client),
+get_revoked_token(Config, UserName) ->
+    BJID = escalus_users:get_jid(Config, UserName),
     JID = escalus_ejabberd:rpc(jlib, binary_to_jid, [BJID]),
     Token = escalus_ejabberd:rpc(mod_auth_token, token, [refresh, JID]),
     ValidSeqNo = escalus_ejabberd:rpc(mod_auth_token_backend, get_sequence_number,
