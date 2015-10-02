@@ -38,7 +38,8 @@ all_tests() ->
      login_access_token_test,
      login_refresh_token_test,
      %% TODO: isolate this test case - clean up the db before it!
-     login_with_revoked_token_test
+     login_with_revoked_token_test,
+     token_revocation_test
     ].
 
 suite() ->
@@ -75,14 +76,17 @@ end_per_testcase(CaseName, Config) ->
     escalus:end_per_testcase(CaseName, Config).
 
 request_tokens_test(Config) ->
-    request_tokens_once_logged_in_impl(Config).
+    request_tokens_once_logged_in_impl(Config, john).
 
 login_with_revoked_token_test(Config) ->
     %% given
     RevokedToken = get_revoked_token(Config, john),
     %ct:pal("serialized: ~p", [RevokedToken]),
+    login_failure_with_revoked_token(Config, john, RevokedToken).
+
+login_failure_with_revoked_token(Config, User, Token) ->
     %% when
-    Result = login_with_token(Config, john, RevokedToken),
+    Result = login_with_token(Config, User, Token),
     % then
     {{auth_failed, _}, _, _} = Result.
 
@@ -103,16 +107,19 @@ get_revoked_token(Config, UserName) ->
 invalid_sequence_no(SeqNo) ->
     SeqNo - 1.
 
-request_tokens_once_logged_in_impl(Config) ->
+request_tokens_once_logged_in(Config) ->
+    request_tokens_once_logged_in_impl(Config, john).
+
+request_tokens_once_logged_in_impl(Config, User) ->
     Self = self(),
     Ref = make_ref(),
-    escalus:story(Config, [{john, 1}], fun(John) ->
-                                               JohnShortJid = escalus_utils:get_short_jid(John),
+    escalus:story(Config, [{User, 1}], fun(Client) ->
+                                               ClientShortJid = escalus_utils:get_short_jid(Client),
                                                R = escalus_stanza:query_el(?NS_AUTH_TOKEN, []),
-                                               IQ = escalus_stanza:iq(JohnShortJid, <<"get">>, R),
+                                               IQ = escalus_stanza:iq(ClientShortJid, <<"get">>, R),
                                                 % ct:pal("--test IQ w query ~p " , [IQ]),
-                                               escalus:send(John, IQ),
-                                               Result = escalus:wait_for_stanza(John),
+                                               escalus:send(Client, IQ),
+                                               Result = escalus:wait_for_stanza(Client),
                                                {AT, RT} = extract_tokens(Result),
                                                Self ! {tokens, Ref, {AT,RT}},
                                                ct:pal("~n Access token: ~n ~p ~nRefresh token: ~n ~p ~n " , [AT,RT])
@@ -125,14 +132,12 @@ request_tokens_once_logged_in_impl(Config) ->
     end.
 
 login_access_token_test(Config) ->
-    Tokens = request_tokens_once_logged_in_impl(Config),
+    Tokens = request_tokens_once_logged_in_impl(Config, john),
     login_access_token_impl(Config, Tokens).
 
-
- login_refresh_token_test(Config) ->
-    Tokens = request_tokens_once_logged_in_impl(Config),
+login_refresh_token_test(Config) ->
+    Tokens = request_tokens_once_logged_in_impl(Config, john),
     login_refresh_token_impl(Config, Tokens).
-
 
 login_refresh_token_impl(Config, {_AccessToken, RefreshToken}) ->
     JohnSpec = escalus_users:get_userspec(Config, john),
@@ -151,7 +156,6 @@ login_refresh_token_impl(Config, {_AccessToken, RefreshToken}) ->
 
     AuthResultToken = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
     ct:pal( " ~n ------ access token received~n ~p ~n ", [AuthResultToken]),
-
     ok.
 
 %% users logs in using access token he obtained in previous session (stream has been
@@ -181,8 +185,29 @@ login_with_token(Config, User, Token) ->
     %ct:pal( " ~n ------Stream Features [0]   ~p ~n ", [Features]),
     Props2 = lists:keystore(oauth_token, 1, Props, {oauth_token, Token}),
     AuthResult = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
-    ct:pal( " ~n ------ SASL (access token) auth result   ~p ~n ", [AuthResult]),
+    %ct:pal( " ~n ------ SASL (access token) auth result   ~p ~n ", [AuthResult]),
     {AuthResult, ClientConnection, Props2}.
+
+token_revocation_test(Config) ->
+    %% given
+    {Owner, SeqNoToRevoke, Token} = get_owner_seqno_to_revoke(Config, john),
+    %% when
+    ok = revoke_token(Owner, SeqNoToRevoke),
+    %% then
+    login_with_token(Config, john, Token).
+
+get_owner_seqno_to_revoke(Config, User) ->
+    {_, RefreshToken} = request_tokens_once_logged_in_impl(Config, User),
+    [_, BOwner, _, SeqNo, _, _] = binary:split(RefreshToken, <<0>>, [global]),
+    Owner = escalus_ejabberd:rpc(jlib, binary_to_jid, [BOwner]),
+    {Owner, binary_to_integer(SeqNo), RefreshToken}.
+
+revoke_token(Owner, SeqNoToRevoke) ->
+    escalus_ejabberd:rpc(mod_auth_token, revoke, [{Owner,SeqNoToRevoke}]).
+
+%%
+%% Helpers
+%%
 
 extract_tokens(#xmlel{name = <<"iq">>, children = [#xmlel{name = <<"items">>} = Items ]}) ->
     ATD = exml_query:path(Items, [{element, <<"access_token">>}, cdata]),
