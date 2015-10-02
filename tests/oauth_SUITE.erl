@@ -37,6 +37,7 @@ all_tests() ->
     [request_tokens_test,
      login_access_token_test,
      login_refresh_token_test,
+     %% TODO: isolate this test case - clean up the db before it!
      login_with_revoked_token_test
     ].
 
@@ -79,6 +80,7 @@ request_tokens_test(Config) ->
 login_with_revoked_token_test(Config) ->
     %% given
     RevokedToken = get_revoked_token(Config, john),
+    %ct:pal("serialized: ~p", [RevokedToken]),
     %% when
     Result = login_with_token(Config, john, RevokedToken),
     % then
@@ -88,14 +90,18 @@ get_revoked_token(Config, UserName) ->
     BJID = escalus_users:get_jid(Config, UserName),
     JID = escalus_ejabberd:rpc(jlib, binary_to_jid, [BJID]),
     Token = escalus_ejabberd:rpc(mod_auth_token, token, [refresh, JID]),
-    ValidSeqNo = escalus_ejabberd:rpc(mod_auth_token_backend, get_sequence_number,
-                                      [refresh, JID]),
-    ct:pal( "~n ValidSEQ ~n~p", [ValidSeqNo]),
-    RevokedToken = setelement(5, Token, invalid_sequence_no(ValidSeqNo)),
+    ValidSeqNo = escalus_ejabberd:rpc(mod_auth_token_backend, get_valid_sequence_number,
+                                      [JID]),
+    %ct:pal( "~n ValidSEQ ~n~p", [ValidSeqNo]),
+    RevokedToken0 = record_set(Token, [{5, invalid_sequence_no(ValidSeqNo)},
+                                       {6, undefined},
+                                       {7, undefined}]),
+    RevokedToken = escalus_ejabberd:rpc(mod_auth_token, token_with_mac, [RevokedToken0]),
+    %ct:pal("revoked: ~p", [RevokedToken]),
     escalus_ejabberd:rpc(mod_auth_token, serialize, [RevokedToken]).
 
 invalid_sequence_no(SeqNo) ->
-    SeqNo + 1.
+    SeqNo - 1.
 
 request_tokens_once_logged_in_impl(Config) ->
     Self = self(),
@@ -221,4 +227,10 @@ do_verify_format(login_scram, _Password, SPassword) ->
 do_verify_format(_, Password, SPassword) ->
     Password = SPassword.
 
-
+%% @doc Set Fields of the Record to Values,
+%% when {Field, Value} <- FieldValues (in list comprehension syntax).
+record_set(Record, FieldValues) ->
+    F = fun({Field, Value}, Rec) ->
+                setelement(Field, Rec, Value)
+        end,
+    lists:foldl(F, Record, FieldValues).
