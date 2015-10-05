@@ -28,16 +28,28 @@
 %%--------------------------------------------------------------------
 
 all() ->
-    [{group, oauth}].
+    [
+     {group, token_login},
+     {group, token_revocation},
+     {group, commands}
+    ].
 
 groups() ->
-    [{oauth, [sequence], all_tests()},
-     {commands, [], [revoke_token_cmd_when_no_token]}].
+    [
+     {token_login, [sequence], token_login_tests()},
+     {token_revocation, [sequence], token_revocation_tests()},
+     {commands, [], [revoke_token_cmd_when_no_token]}
+    ].
 
-all_tests() ->
-    [request_tokens_test,
+token_login_tests() ->
+    [
+     request_tokens_test,
      login_access_token_test,
-     login_refresh_token_test,
+     login_refresh_token_test
+    ].
+
+token_revocation_tests() ->
+    [
      %% TODO: isolate this test case - clean up the db before it!
      login_with_revoked_token_test,
      token_revocation_test
@@ -75,9 +87,11 @@ end_per_group(_GroupName, Config) ->
     escalus:delete_users(Config, {by_name, [john, alice]}).
 
 init_per_testcase(CaseName, Config0) ->
+    clean_token_db(),
     escalus:init_per_testcase(CaseName, Config0).
 
 end_per_testcase(CaseName, Config) ->
+    clean_token_db(),
     escalus:end_per_testcase(CaseName, Config).
 
 %%
@@ -177,7 +191,7 @@ login_access_token_impl(Config, {AccessToken, _RefreshToken}) ->
     %todo: create step out of above lines
     {NewClientConnection, Props4, NewFeatures2} =
         escalus_session:bind(ClientConnection, Props3, NewFeatures),
-    {NewClientConnection2, Props5, NewFeatures3} =
+    {NewClientConnection2, _Props5, _NewFeatures3} =
         escalus_session:session(NewClientConnection, Props4, NewFeatures2),
     escalus:send(NewClientConnection2, escalus_stanza:presence(<<"available">>)),
     escalus:assert(is_presence, escalus:wait_for_stanza(NewClientConnection2)).
@@ -199,9 +213,9 @@ login_with_token(Config, User, Token) ->
 
 token_revocation_test(Config) ->
     %% given
-    {Owner, SeqNoToRevoke, Token} = get_owner_seqno_to_revoke(Config, john),
+    {Owner, _SeqNoToRevoke, Token} = get_owner_seqno_to_revoke(Config, john),
     %% when
-    ok = revoke_token(Owner, SeqNoToRevoke),
+    ok = revoke_token(Owner),
     %% then
     login_failure_with_revoked_token(Config, john, Token).
 
@@ -211,7 +225,7 @@ get_owner_seqno_to_revoke(Config, User) ->
     Owner = escalus_ejabberd:rpc(jlib, binary_to_jid, [BOwner]),
     {Owner, binary_to_integer(SeqNo), RefreshToken}.
 
-revoke_token(Owner, SeqNoToRevoke) ->
+revoke_token(Owner) ->
     Result =  escalus_ejabberd:rpc(mod_auth_token, revoke, [Owner]),
     ct:pal("~n revoke result ~p ", [Result]),
     Result.
@@ -288,3 +302,9 @@ convert_args(Args) -> [ convert_arg(A) || A <- Args ].
 convert_arg(B) when is_binary(B) -> binary_to_list(B);
 convert_arg(A) when is_atom(A) -> atom_to_list(A);
 convert_arg(S) when is_list(S) -> S.
+
+clean_token_db() ->
+    Q = [<<"DELETE FROM auth_token">>],
+    ODBCHost = <<"localhost">>, %% mam is also tested against local odbc
+    R = escalus_ejabberd:rpc(ejabberd_odbc, sql_query, [ODBCHost, Q]),
+    ct:pal(" ~n clean auth_token result ~n~p", [R]).
