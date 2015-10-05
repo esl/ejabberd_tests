@@ -194,16 +194,18 @@ token_revocation_test(Config) ->
     %% when
     ok = revoke_token(Owner, SeqNoToRevoke),
     %% then
-    login_with_token(Config, john, Token).
+    login_failure_with_revoked_token(Config, john, Token).
 
 get_owner_seqno_to_revoke(Config, User) ->
     {_, RefreshToken} = request_tokens_once_logged_in_impl(Config, User),
-    [_, BOwner, _, SeqNo, _, _] = binary:split(RefreshToken, <<0>>, [global]),
+    [_, BOwner, _, SeqNo, _] = binary:split(RefreshToken, <<0>>, [global]),
     Owner = escalus_ejabberd:rpc(jlib, binary_to_jid, [BOwner]),
     {Owner, binary_to_integer(SeqNo), RefreshToken}.
 
 revoke_token(Owner, SeqNoToRevoke) ->
-    escalus_ejabberd:rpc(mod_auth_token, revoke, [{Owner,SeqNoToRevoke}]).
+    Result =  escalus_ejabberd:rpc(mod_auth_token, revoke, [Owner]),
+    ct:pal("~n revoke result ~p ", [Result]),
+    Result.
 
 %%
 %% Helpers
