@@ -54,7 +54,11 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
     escalus:end_per_suite(Config).
 
-init_per_group(GroupName, Config) ->
+init_per_group(GroupName, Config0) ->
+    Config = case GroupName of
+                 commands -> ejabberd_node_utils:init(Config0);
+                 _ -> Config0
+             end,
     case get_auth_method() of
         external ->
             {skip, "external authentication requires plain password"};
@@ -74,6 +78,10 @@ init_per_testcase(CaseName, Config0) ->
 
 end_per_testcase(CaseName, Config) ->
     escalus:end_per_testcase(CaseName, Config).
+
+%%
+%% Tests
+%%
 
 request_tokens_test(Config) ->
     request_tokens_once_logged_in_impl(Config, john).
@@ -261,3 +269,13 @@ record_set(Record, FieldValues) ->
                 setelement(Field, Rec, Value)
         end,
     lists:foldl(F, Record, FieldValues).
+
+mimctl(Config, CmdAndArgs) ->
+    Node = ct:get_config(ejabberd_node),
+    ejabberd_node_utils:call_ctl_with_args(Node, convert_args(CmdAndArgs), Config).
+
+convert_args(Args) -> [ convert_arg(A) || A <- Args ].
+
+convert_arg(B) when is_binary(B) -> binary_to_list(B);
+convert_arg(A) when is_atom(A) -> atom_to_list(A);
+convert_arg(S) when is_list(S) -> S.
