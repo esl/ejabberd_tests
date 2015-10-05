@@ -31,7 +31,8 @@ all() ->
     [{group, oauth}].
 
 groups() ->
-    [{oauth, [sequence], all_tests()}].
+    [{oauth, [sequence], all_tests()},
+     {commands, [], [revoke_token_cmd_when_no_token]}].
 
 all_tests() ->
     [request_tokens_test,
@@ -214,6 +215,14 @@ revoke_token(Owner, SeqNoToRevoke) ->
     Result =  escalus_ejabberd:rpc(mod_auth_token, revoke, [Owner]),
     ct:pal("~n revoke result ~p ", [Result]),
     Result.
+
+revoke_token_cmd_when_no_token(Config) ->
+    %% given existing user with no token
+    %% when revoking token
+    R = mimctl(Config, ["revoke_token", escalus_users:get_jid(Config, john)]),
+    %% then no token was found
+    %ct:pal("~p", [R]),
+    "User or token not found.\n" = R.
 
 %%
 %% Helpers
