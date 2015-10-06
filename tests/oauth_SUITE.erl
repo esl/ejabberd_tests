@@ -38,7 +38,8 @@ groups() ->
     [
      {token_login, [sequence], token_login_tests()},
      {token_revocation, [sequence], token_revocation_tests()},
-     {commands, [], [revoke_token_cmd_when_no_token]}
+     {commands, [], [revoke_token_cmd_when_no_token,
+                     revoke_token_cmd]}
     ].
 
 token_login_tests() ->
@@ -237,6 +238,14 @@ revoke_token_cmd_when_no_token(Config) ->
     %% then no token was found
     %ct:pal("~p", [R]),
     "User or token not found.\n" = R.
+
+revoke_token_cmd(Config) ->
+    %% given existing user and token present in the database
+    _Tokens = request_tokens_once_logged_in_impl(Config, john),
+    %% when
+    R = mimctl(Config, ["revoke_token", escalus_users:get_jid(Config, john)]),
+    %% then
+    "Revoked.\n" = R.
 
 %%
 %% Helpers
