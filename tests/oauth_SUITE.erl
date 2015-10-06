@@ -79,7 +79,6 @@ init_per_group(GroupName, Config0) ->
         _ ->
             config_password_format(GroupName),
             Config2 = escalus:create_users(Config, {by_name, [john, alice]}),
-            %% ct:pal("-- created users ~p ", [Config2]),
             assert_password_format(GroupName, Config2)
     end.
 
@@ -105,7 +104,6 @@ request_tokens_test(Config) ->
 login_with_revoked_token_test(Config) ->
     %% given
     RevokedToken = get_revoked_token(Config, john),
-    %ct:pal("serialized: ~p", [RevokedToken]),
     login_failure_with_revoked_token(Config, john, RevokedToken).
 
 login_failure_with_revoked_token(Config, User, Token) ->
@@ -120,12 +118,10 @@ get_revoked_token(Config, UserName) ->
     Token = escalus_ejabberd:rpc(mod_auth_token, token, [refresh, JID]),
     ValidSeqNo = escalus_ejabberd:rpc(mod_auth_token_backend, get_valid_sequence_number,
                                       [JID]),
-    %ct:pal( "~n ValidSEQ ~n~p", [ValidSeqNo]),
     RevokedToken0 = record_set(Token, [{5, invalid_sequence_no(ValidSeqNo)},
                                        {6, undefined},
                                        {7, undefined}]),
     RevokedToken = escalus_ejabberd:rpc(mod_auth_token, token_with_mac, [RevokedToken0]),
-    %ct:pal("revoked: ~p", [RevokedToken]),
     escalus_ejabberd:rpc(mod_auth_token, serialize, [RevokedToken]).
 
 invalid_sequence_no(SeqNo) ->
@@ -141,12 +137,10 @@ request_tokens_once_logged_in_impl(Config, User) ->
                                                ClientShortJid = escalus_utils:get_short_jid(Client),
                                                R = escalus_stanza:query_el(?NS_AUTH_TOKEN, []),
                                                IQ = escalus_stanza:iq(ClientShortJid, <<"get">>, R),
-                                                % ct:pal("--test IQ w query ~p " , [IQ]),
                                                escalus:send(Client, IQ),
                                                Result = escalus:wait_for_stanza(Client),
                                                {AT, RT} = extract_tokens(Result),
-                                               Self ! {tokens, Ref, {AT,RT}},
-                                               ct:pal("~n Access token: ~n ~p ~nRefresh token: ~n ~p ~n " , [AT,RT])
+                                               Self ! {tokens, Ref, {AT,RT}}
                                        end),
     receive
         {tokens, Ref, Tokens} ->
@@ -173,13 +167,8 @@ login_refresh_token_impl(Config, {_AccessToken, RefreshToken}) ->
                 ],
 
     {ok, ClientConnection, Props, _Features} = escalus_connection:start(JohnSpec, ConnSteps),
-
-    ct:pal( " ~n ------ refresh token sent~n ~p ~n ", [RefreshToken]),
-
     Props2 = lists:keystore(oauth_token, 1, Props, {oauth_token, RefreshToken}),
-
     AuthResultToken = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
-    ct:pal( " ~n ------ access token received~n ~p ~n ", [AuthResultToken]),
     ok.
 
 %% users logs in using access token he obtained in previous session (stream has been
@@ -205,11 +194,8 @@ login_with_token(Config, User, Token) ->
                         maybe_use_compression
                         ],
     {ok, ClientConnection, Props, _Features} = escalus_connection:start(UserSpec, ConnSteps),
-    %ct:pal( " ~n ------connection data ~p ~n ", [ClientConnection]),
-    %ct:pal( " ~n ------Stream Features [0]   ~p ~n ", [Features]),
     Props2 = lists:keystore(oauth_token, 1, Props, {oauth_token, Token}),
     AuthResult = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
-    %ct:pal( " ~n ------ SASL (access token) auth result   ~p ~n ", [AuthResult]),
     {AuthResult, ClientConnection, Props2}.
 
 token_revocation_test(Config) ->
@@ -227,16 +213,13 @@ get_owner_seqno_to_revoke(Config, User) ->
     {Owner, binary_to_integer(SeqNo), RefreshToken}.
 
 revoke_token(Owner) ->
-    Result =  escalus_ejabberd:rpc(mod_auth_token, revoke, [Owner]),
-    ct:pal("~n revoke result ~p ", [Result]),
-    Result.
+    escalus_ejabberd:rpc(mod_auth_token, revoke, [Owner]).
 
 revoke_token_cmd_when_no_token(Config) ->
     %% given existing user with no token
     %% when revoking token
     R = mimctl(Config, ["revoke_token", escalus_users:get_jid(Config, john)]),
     %% then no token was found
-    %ct:pal("~p", [R]),
     "User or token not found.\n" = R.
 
 revoke_token_cmd(Config) ->
@@ -315,5 +298,4 @@ convert_arg(S) when is_list(S) -> S.
 clean_token_db() ->
     Q = [<<"DELETE FROM auth_token">>],
     ODBCHost = <<"localhost">>, %% mam is also tested against local odbc
-    R = escalus_ejabberd:rpc(ejabberd_odbc, sql_query, [ODBCHost, Q]),
-    ct:pal(" ~n clean auth_token result ~n~p", [R]).
+    {updated, _} = escalus_ejabberd:rpc(ejabberd_odbc, sql_query, [ODBCHost, Q]).
