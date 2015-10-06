@@ -52,7 +52,6 @@ token_login_tests() ->
 
 token_revocation_tests() ->
     [
-     %% TODO: isolate this test case - clean up the db before it!
      login_with_revoked_token_test,
      token_revocation_test
     ].
