@@ -39,7 +39,8 @@ groups() ->
      {token_login, [sequence], token_login_tests()},
      {token_revocation, [sequence], token_revocation_tests()},
      {commands, [], [revoke_token_cmd_when_no_token,
-                     revoke_token_cmd]}
+                     revoke_token_cmd]},
+     {cleanup, [], [token_removed_on_user_removal]}
     ].
 
 token_login_tests() ->
@@ -230,6 +231,14 @@ revoke_token_cmd(Config) ->
     %% then
     "Revoked.\n" = R.
 
+token_removed_on_user_removal(Config) ->
+    %% given existing user with token
+    _Tokens = request_tokens_once_logged_in_impl(Config, john),
+    %% when user account is deleted
+    escalus:delete_users(Config, {by_name, [john]}),
+    %% then token database doesn't contain user's tokens
+    {selected, _, []} = get_users_token(Config, john).
+
 %%
 %% Helpers
 %%
@@ -299,3 +308,9 @@ clean_token_db() ->
     Q = [<<"DELETE FROM auth_token">>],
     ODBCHost = <<"localhost">>, %% mam is also tested against local odbc
     {updated, _} = escalus_ejabberd:rpc(ejabberd_odbc, sql_query, [ODBCHost, Q]).
+
+get_users_token(C, User) ->
+    Q = ["SELECT * FROM auth_token at "
+         "WHERE at.owner = '", escalus_users:get_jid(C, User), "';"],
+    escalus_ejabberd:rpc(ejabberd_odbc, sql_query,
+                         [escalus_users:get_server(C, User), Q]).
