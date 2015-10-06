@@ -62,10 +62,12 @@ suite() ->
 %%--------------------------------------------------------------------
 %% Init & teardown
 %%--------------------------------------------------------------------
-init_per_suite(Config) ->
+init_per_suite(Config0) ->
+    Config = dynamic_modules:stop_running(mod_last, Config0),
     escalus:init_per_suite(Config).
 
 end_per_suite(Config) ->
+    dynamic_modules:start_running(Config),
     escalus:end_per_suite(Config).
 
 init_per_group(GroupName, Config0) ->
@@ -82,6 +84,8 @@ init_per_group(GroupName, Config0) ->
             assert_password_format(GroupName, Config2)
     end.
 
+end_per_group(cleanup, Config) ->
+    escalus:delete_users(Config, {by_name, [alice]});
 end_per_group(_GroupName, Config) ->
     set_store_password(plain),
     escalus:delete_users(Config, {by_name, [john, alice]}).
@@ -231,10 +235,17 @@ revoke_token_cmd(Config) ->
     "Revoked.\n" = R.
 
 token_removed_on_user_removal(Config) ->
-    %% given existing user with token
+    %% given existing user with token and XMPP (de)registration available
     _Tokens = request_tokens_once_logged_in_impl(Config, john),
+    true = is_xmpp_registration_available(escalus_users:get_server(Config, john)),
     %% when user account is deleted
-    escalus:delete_users(Config, {by_name, [john]}),
+    S = fun (John) ->
+                IQ = escalus_stanza:remove_account(),
+                escalus:send(John, IQ),
+                timer:sleep(500),
+                escalus:assert(is_iq_result, [IQ], escalus:wait_for_stanza(John))
+        end,
+    escalus:story(Config, [{john, 1}], S),
     %% then token database doesn't contain user's tokens
     {selected, _, []} = get_users_token(Config, john).
 
@@ -313,3 +324,6 @@ get_users_token(C, User) ->
          "WHERE at.owner = '", escalus_users:get_jid(C, User), "';"],
     escalus_ejabberd:rpc(ejabberd_odbc, sql_query,
                          [escalus_users:get_server(C, User), Q]).
+
+is_xmpp_registration_available(Domain) ->
+    escalus_ejabberd:rpc(gen_mod, is_loaded, [Domain, mod_register]).
