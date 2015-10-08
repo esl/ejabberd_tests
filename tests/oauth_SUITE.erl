@@ -47,7 +47,8 @@ token_login_tests() ->
     [
      request_tokens_test,
      login_access_token_test,
-     login_refresh_token_test
+     login_refresh_token_test,
+     login_with_other_users_token
     ].
 
 token_revocation_tests() ->
@@ -160,6 +161,10 @@ login_access_token_test(Config) ->
 login_refresh_token_test(Config) ->
     Tokens = request_tokens_once_logged_in_impl(Config, john),
     login_refresh_token_impl(Config, Tokens).
+
+login_with_other_users_token(Config) ->
+    {_, RToken} = request_tokens_once_logged_in_impl(Config, john),
+    login_failure_with_revoked_token(Config, alice, RToken).
 
 login_refresh_token_impl(Config, {_AccessToken, RefreshToken}) ->
     JohnSpec = escalus_users:get_userspec(Config, john),
