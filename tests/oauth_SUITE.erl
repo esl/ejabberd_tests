@@ -162,9 +162,25 @@ login_refresh_token_test(Config) ->
     Tokens = request_tokens_once_logged_in_impl(Config, john),
     login_refresh_token_impl(Config, Tokens).
 
+%% Scenario describing JID spoofing with an eavesdropped / stolen token.
 login_with_other_users_token(Config) ->
-    {_, RToken} = request_tokens_once_logged_in_impl(Config, john),
-    login_failure_with_revoked_token(Config, alice, RToken).
+    %% given user and another user's token
+    {_, JohnsToken} = request_tokens_once_logged_in_impl(Config, john),
+    AliceSpec = user_authenticating_with_token(Config, alice, JohnsToken),
+    %% when we try to log in
+    ConnSteps = [start_stream,
+                 stream_features,
+                 maybe_use_ssl,
+                 authenticate,
+                 fun (Alice, Props, Features) ->
+                         escalus:send(Alice, escalus_stanza:bind(<<"test-resource">>)),
+                         BindReply = escalus_connection:get_stanza(Alice, bind_reply),
+                         {Alice, [{bind_reply, BindReply} | Props], Features}
+                 end],
+    {ok, _, Props, _} = escalus_connection:start(AliceSpec, ConnSteps),
+    %% then the server recognizes us as the other user
+    LoggedInAs = extract_bound_jid(proplists:get_value(bind_reply, Props)),
+    true = escalus_utils:get_username(LoggedInAs) /= escalus_users:get_username(Config, AliceSpec).
 
 login_refresh_token_impl(Config, {_AccessToken, RefreshToken}) ->
     JohnSpec = escalus_users:get_userspec(Config, john),
@@ -332,3 +348,12 @@ get_users_token(C, User) ->
 
 is_xmpp_registration_available(Domain) ->
     escalus_ejabberd:rpc(gen_mod, is_loaded, [Domain, mod_register]).
+
+user_authenticating_with_token(Config, UserName, Token) ->
+    Spec1 = lists:keystore(oauth_token, 1, escalus_users:get_userspec(Config, UserName),
+                           {oauth_token, Token}),
+    lists:keystore(auth, 1, Spec1, {auth, {escalus_auth, auth_sasl_oauth}}).
+
+extract_bound_jid(BindReply) ->
+    exml_query:path(BindReply, [{element, <<"bind">>}, {element, <<"jid">>},
+                                cdata]).
