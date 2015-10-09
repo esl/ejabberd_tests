@@ -140,7 +140,7 @@ request_tokens_once_logged_in_impl(Config, User) ->
     Ref = make_ref(),
     escalus:story(Config, [{User, 1}], fun(Client) ->
                                                ClientShortJid = escalus_utils:get_short_jid(Client),
-                                               R = escalus_stanza:query_el(?NS_AUTH_TOKEN, []),
+                                               R = escalus_stanza:query_el(?NS_ESL_TOKEN_AUTH, []),
                                                IQ = escalus_stanza:iq(ClientShortJid, <<"get">>, R),
                                                escalus:send(Client, IQ),
                                                Result = escalus:wait_for_stanza(Client),
