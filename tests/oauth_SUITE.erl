@@ -40,6 +40,7 @@ groups() ->
     [
      {token_login, [sequence], token_login_tests()},
      {token_revocation, [sequence], token_revocation_tests()},
+     {provision_token, [], [provision_token_login]},
      {commands, [], [revoke_token_cmd_when_no_token,
                      revoke_token_cmd]},
      {cleanup, [], [token_removed_on_user_removal]}
@@ -271,6 +272,18 @@ token_removed_on_user_removal(Config) ->
     %% then token database doesn't contain user's tokens
     {selected, _, []} = get_users_token(Config, john).
 
+provision_token_login(Config) ->
+    %% given
+    VCard = make_vcard(Config, john),
+    ProvisionToken = make_provision_token(Config, john, VCard),
+    UserSpec = user_authenticating_with_token(Config, john, ProvisionToken),
+    %% when logging in with provision token
+    {ok, Conn, _, _} = escalus_connection:start(UserSpec),
+    escalus:send(Conn, escalus_stanza:vcard_request()),
+    %% then user's vcard is placed into the database on login
+    Result = escalus:wait_for_stanza(Conn),
+    VCard = exml_query:subelement(Result, <<"vCard">>).
+
 %%
 %% Helpers
 %%
@@ -358,3 +371,43 @@ user_authenticating_with_token(Config, UserName, Token) ->
 extract_bound_jid(BindReply) ->
     exml_query:path(BindReply, [{element, <<"bind">>}, {element, <<"jid">>},
                                 cdata]).
+
+get_provision_key(Domain) ->
+    RPCArgs = [get_key, Domain, [], [{provision_pre_shared, Domain}]],
+    [{_, RawKey}] = escalus_ejabberd:rpc(ejabberd_hooks, run_fold, RPCArgs),
+    RawKey.
+
+make_vcard(Config, User) ->
+    T = <<"<vCard xmlns='vcard-temp'>"
+          "  <FN>Full Name</FN>"
+          "  <NICKNAME>{{nick}}</NICKNAME>"
+          "</vCard>">>,
+    escalus_stanza:from_template(T, [{nick, escalus_users:get_username(Config, User)}]).
+
+make_provision_token(Config, User, VCard) ->
+    ExpiryFarInTheFuture = {{2055,10,27},{10,54,22}},
+    Username = escalus_users:get_username(Config, User),
+    Domain = escalus_users:get_server(Config, User),
+    ServerSideJID = {jid, Username, Domain, <<>>,
+                     Username, Domain, <<>>},
+    T0 = {token, provision,
+          ExpiryFarInTheFuture,
+          ServerSideJID,
+          %% sequence no
+          undefined,
+          VCard,
+          %% MAC
+          undefined,
+          %% body
+          undefined},
+    T = escalus_ejabberd:rpc(mod_auth_token, token_with_mac, [T0]),
+    %% assert no RPC error occured
+    {token, provision} = {element(1, T), element(2, T)},
+    serialize(T).
+
+serialize(ServerSideToken) ->
+    Serialized = escalus_ejabberd:rpc(mod_auth_token, serialize, [ServerSideToken]),
+    if
+        is_binary(Serialized) -> Serialized;
+        not is_binary(Serialized) -> error(Serialized)
+    end.
