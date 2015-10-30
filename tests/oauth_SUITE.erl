@@ -31,7 +31,9 @@ all() ->
     [
      {group, token_login},
      {group, token_revocation},
-     {group, commands}
+     {group, provision_token},
+     {group, commands},
+     {group, cleanup}
     ].
 
 groups() ->
@@ -121,11 +123,11 @@ get_revoked_token(Config, UserName) ->
     BJID = escalus_users:get_jid(Config, UserName),
     JID = escalus_ejabberd:rpc(jlib, binary_to_jid, [BJID]),
     Token = escalus_ejabberd:rpc(mod_auth_token, token, [refresh, JID]),
-    ValidSeqNo = escalus_ejabberd:rpc(mod_auth_token_backend, get_valid_sequence_number,
+    ValidSeqNo = escalus_ejabberd:rpc(mod_auth_token_odbc, get_valid_sequence_number,
                                       [JID]),
     RevokedToken0 = record_set(Token, [{5, invalid_sequence_no(ValidSeqNo)},
-                                       {6, undefined},
-                                       {7, undefined}]),
+                                       {7, undefined},
+                                       {8, undefined}]),
     RevokedToken = escalus_ejabberd:rpc(mod_auth_token, token_with_mac, [RevokedToken0]),
     escalus_ejabberd:rpc(mod_auth_token, serialize, [RevokedToken]).
 
