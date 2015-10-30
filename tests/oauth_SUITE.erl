@@ -216,10 +216,9 @@ login_access_token_impl(Config, {AccessToken, _RefreshToken}) ->
 login_with_token(Config, User, Token) ->
     UserSpec = escalus_users:get_userspec(Config, User),
     ConnSteps = [start_stream,
-                        stream_features,
-                        maybe_use_ssl,
-                        maybe_use_compression
-                        ],
+                 stream_features,
+                 maybe_use_ssl,
+                 maybe_use_compression],
     {ok, ClientConnection, Props, _Features} = escalus_connection:start(UserSpec, ConnSteps),
     Props2 = lists:keystore(oauth_token, 1, Props, {oauth_token, Token}),
     AuthResult = (catch escalus_auth:auth_sasl_oauth(ClientConnection, Props2)),
