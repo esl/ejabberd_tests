@@ -112,9 +112,9 @@ request_tokens_test(Config) ->
 login_with_revoked_token_test(Config) ->
     %% given
     RevokedToken = get_revoked_token(Config, john),
-    login_failure_with_revoked_token(Config, john, RevokedToken).
+    token_login_failure(Config, john, RevokedToken).
 
-login_failure_with_revoked_token(Config, User, Token) ->
+token_login_failure(Config, User, Token) ->
     %% when
     Result = login_with_token(Config, User, Token),
     % then
@@ -231,7 +231,7 @@ token_revocation_test(Config) ->
     %% when
     ok = revoke_token(Owner),
     %% then
-    login_failure_with_revoked_token(Config, john, Token).
+    token_login_failure(Config, john, Token).
 
 get_owner_seqno_to_revoke(Config, User) ->
     {_, RefreshToken} = request_tokens_once_logged_in_impl(Config, User),
