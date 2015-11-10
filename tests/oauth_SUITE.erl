@@ -51,7 +51,8 @@ token_login_tests() ->
      request_tokens_test,
      login_access_token_test,
      login_refresh_token_test,
-     login_with_other_users_token
+     login_with_other_users_token,
+     login_with_malformed_token
     ].
 
 token_revocation_tests() ->
@@ -184,6 +185,12 @@ login_with_other_users_token(Config) ->
     %% then the server recognizes us as the other user
     LoggedInAs = extract_bound_jid(proplists:get_value(bind_reply, Props)),
     true = escalus_utils:get_username(LoggedInAs) /= escalus_users:get_username(Config, AliceSpec).
+
+login_with_malformed_token(Config) ->
+    %% given
+    MalformedToken = <<"malformed ", (crypto:rand_bytes(64))/bytes>>,
+    %% when / then
+    token_login_failure(Config, john, MalformedToken).
 
 login_refresh_token_impl(Config, {_AccessToken, RefreshToken}) ->
     JohnSpec = escalus_users:get_userspec(Config, john),
